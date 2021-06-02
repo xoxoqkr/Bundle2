@@ -23,6 +23,7 @@ class Customer(object):
 class rider(object):
     def __init__(self, env, name, platform, stores, capacity = 3, end_time = 1000):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
+        self.start_time = int(env.now)
         self.resource = simpy.Resource(env, capacity = capacity)
         self.done_orders = []
         self.capacity = capacity
@@ -210,6 +211,21 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         name += 1
 
 
+def CalculateRho(lamda1, lamda2, mu1, mu2, add_lamda = 0, add_mu = 0):
+    """
+    Calculate rho
+    :param lamda1: current lamda
+    :param lamda2: expected lamda of the near future time slot
+    :param mu1: current mu
+    :param mu2: expected mu of the near future time slot
+    :param add_lamda: additional lamda
+    :param add_mu: additional mu
+    :return: rho
+    """
+    rho = (lamda1 + lamda2 + add_lamda) / (mu1 + mu2, add_mu)
+    return round(rho, 4)
+
+
 def RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres = 1):
     """
     Cacluate required b2 and b3 number
@@ -225,13 +241,15 @@ def RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres = 1):
     b3 = 0
     for index in range(lamda1+lamda2):
         b2 += 1
-        rho = (lamda1 + lamda2 - b2)/(mu1 + mu2)
+        rho = CalculateRho(lamda1, lamda2, mu1, mu2, add_lamda = -b2)
+        #rho = (lamda1 + lamda2 - b2)/(mu1 + mu2)
         if rho <= thres:
             return b2, b3
     for index in range(lamda1+lamda2):
         b2 -= 1
         b3 += 1
-        rho = (lamda1 + lamda2 - b2 - b3)/(mu1 + mu2)
+        rho = CalculateRho(lamda1, lamda2, mu1, mu2, add_lamda=-(b2+b3))
+        #rho = (lamda1 + lamda2 - b2 - b3)/(mu1 + mu2)
         if rho <= thres:
             return b2, b3
     return b2, b3
@@ -248,7 +266,14 @@ def distance(p1, p2):
     return round(euc_dist,4)
 
 
-def RouteTime(orders, route, speed):
+def RouteTime(orders, route, speed = 1):
+    """
+    Time to move the route with speed
+    :param orders: order in route
+    :param route: seq
+    :param speed: rider speed
+    :return: time : float
+    """
     time = 0
     locs = {}
     for order in orders:
@@ -267,10 +292,21 @@ def RouteTime(orders, route, speed):
     return round(time,4)
 
 
-def FLT_Calculate(orders, names, route, p2, speed):
+def FLT_Calculate(orders, route, p2, speed = 1):
+    """
+    Calculate the customer`s Food Delivery Time in route(bundle)
+
+    :param orders: customer order in the route. type: customer class
+    :param route: customer route. [int,...,]
+    :param p2: allowable FLT increase
+    :param speed: rider speed
+    :return: Feasiblity : True/False, FLT list : [float,...,]
+    """
+    names = []
+    for order in orders:
+        names.append(order.name)
     n = len(names)
     ftds = []
-    feasiblity = True
     for order_name in names:
         s = route.index(order_name)
         e = route.index(order_name + n)
@@ -282,7 +318,17 @@ def FLT_Calculate(orders, names, route, p2, speed):
     return True, [ftds]
 
 
-def BundleConstruct(orders, names, p2, speed):
+def BundleConsist(orders, p2, speed = 1):
+    """
+    Construct bundle consists of orders
+    :param orders: customer order in the route. type: customer class
+    :param p2: allowable FLT increase
+    :param speed: rider speed
+    :return: feasible route
+    """
+    names = []
+    for order in orders:
+        names.append(order.name)
     n = len(names)
     candi = []
     for name in names:
@@ -310,7 +356,18 @@ def BundleConstruct(orders, names, p2, speed):
 
 
 
-def Bundle_Search(orders, s, n, p2, speed):
+def ConstructBundle(orders, s, n, p2, speed = 1):
+    """
+    Construct s-size bundle pool based on the customer in orders.
+    And select n bundle from the pool
+    Required condition : customer`s FLT <= p2
+    :param orders: userved customers : [customer class, ...,]
+    :param s: bundle size: 2 or 3
+    :param n: needed bundle number
+    :param p2: max FLT
+    :param speed:rider speed
+    :return: constructed bundle set
+    """
     B = []
     for order in orders:
         d = []
@@ -326,7 +383,7 @@ def Bundle_Search(orders, s, n, p2, speed):
             subset_orders = []
             for name in q:
                 subset_orders.append(orders[name])
-            tem_route_info = BundleConstruct(subset_orders,q, p2, speed)
+            tem_route_info = BundleConsist(subset_orders, p2, speed)
             b.append(tem_route_info)
         if len(b) > 0:
             b.sort(operator.itemgetter(2))
@@ -347,6 +404,83 @@ def Bundle_Search(orders, s, n, p2, speed):
                 break
     print("selected bundle#", len(selected_bundles))
     return selected_bundles
+
+
+def CountUnpickedOrders(orders, now_t , interval = 10, return_type = 'class'):
+    """
+    return un-picked order
+    :param orders: order list : [order class,...]
+    :param now_t : now time
+    :param interval : platform`s bundle construct interval # 플랫폼에서 번들을 생성하는 시간 간격.
+    :param return_type: 'class'/'name'
+    :return: unpicked_orders, lamda2(future generated order)
+    """
+    unpicked_orders = []
+    interval_orders = []
+    for order in orders:
+        if order.time_info[1] == None:
+            if return_type == 'class':
+                unpicked_orders.append(order)
+            elif return_type == 'name':
+                unpicked_orders.append(order.name)
+            else:
+                pass
+        if now_t- interval <= rider.start_time < now_t:
+            interval_orders.append(rider.name)
+    return unpicked_orders, len(interval_orders)
+
+
+def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
+    """
+    return idle rider
+    :param riders: rider list : [rider class,...]
+    :param now_t : now time
+    :param interval : platform`s bundle construct interval # 플랫폼에서 번들을 생성하는 시간 간격.
+    :param return_type: 'class'/'name'
+    :return: idle_riders, mu2(future generated rider)
+    """
+    idle_riders = []
+    interval_riders = []
+    for rider in riders:
+        #Count current idle rider
+        if len(rider.resource.users) == 0:
+            if return_type == 'class':
+                idle_riders.append(rider)
+            elif return_type == 'name':
+                idle_riders.append(rider.name)
+            else:
+                pass
+        #count rider occurred from (now_t - interval, now)
+        if now_t- interval <= rider.start_time < now_t:
+            interval_riders.append(rider.name)
+    return idle_riders, len(interval_riders)
+
+def Platform_process(env, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000):
+    while env.now <= end_t:
+        now_t = env.now
+        p = CalculateRho()
+        unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval ,return_type = 'class') #lamda1
+        lamda1 = len(unpicked_orders)
+        idle_riders,mu2 = CountIdleRiders(riders, return_type = 'class')
+        mu1 = len(idle_riders)
+        if p >= thres_p:
+            if len(lamda1)/3 < mu1 + mu2:
+                b2,b3 = RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres=thres_p)
+            else:
+                b2 = 0
+                b3 = int(len(lamda1)/3)
+            B = []
+            if b2 > 0:
+                b2_bundle = ConstructBundle(orders, 2, b2, p2, speed = speed)
+                B.append(b2_bundle)
+            if b3 > 0:
+                b3_bundle = ConstructBundle(orders, 3, b3, p2, speed = speed)
+                B.append(b2_bundle)
+            #offer bundle to the rider:
+        else:
+            if offered bundle exist:
+                release offered bundle
+        yield env.timeout(interval)
 
 # bracnh test
 #파라메터 부
