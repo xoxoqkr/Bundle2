@@ -53,6 +53,7 @@ def ordergenerator(env, queue, interval = 5, end_time = 100):
 
 
 #실행부
+# str for test
 env = simpy.Environment()
 Platform = simpy.Store(env)
 env.process(ordergenerator(env, Platform))
