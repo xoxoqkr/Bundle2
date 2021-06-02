@@ -25,7 +25,8 @@ class rider(object):
         self.done_orders = []
         self.capacity = capacity
         self.end = False
-        env.process(self.Runner(env, platform,stores, end_time = end_time))
+        self.end_time = env.now + end_time
+        env.process(self.Runner(env, platform,stores))
 
 
     def RiderMoving(self, env, time):
@@ -37,8 +38,16 @@ class rider(object):
         yield env.timeout(time)
         print('현재T:',int(env.now),"/라이더 ",self.name,"가게 도착")
 
-    def Runner(self, env, platform, stores, ready_time = 2, end_time = 100):
-        while env.now < end_time:
+    def Runner(self, env, platform, stores, ready_time = 2):
+        """
+        Rider`s behavior during working time.
+        :param env: simpy Env
+        :param platform: Platform
+        :param stores: Store. resource. limited capacity for cooking
+        :param ready_time: ready time for pick-up
+        :param end_time: rider exit time. rider will be accept the order until end time.
+        """
+        while env.now < self.end_time:
             if len(platform) > 0 and len(self.resource.put_queue) < self.capacity:
                 order = RiderChoiceCustomer(self, platform)  #todo: 라이더가 platform의 주문 중 가장 이윤이 높은 것을 선택.
                 #order = platform[0] #큐의 가장 앞에 주문을 잡음.
@@ -72,6 +81,10 @@ class rider(object):
 
 
 class Store(object):
+    """
+    Store can received the order.
+    Store has capacity. The order exceed the capacity must be wait.
+    """
     def __init__(self, env, platform, name, order_ready_time = 7, capacity = 6, slack = 2):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.order_ready_time = order_ready_time
@@ -85,10 +98,18 @@ class Store(object):
         env.process(self.StoreRunner(env, platform, capacity = capacity))
 
 
-    def StoreRunner(self, env, platform, capacity, open_time = 1, end_time = 900):
+    def StoreRunner(self, env, platform, capacity, open_time = 1, close_time = 900):
+        """
+        Store order cooking process
+        :param env: simpy Env
+        :param platform: Platform
+        :param capacity: store`s capacity
+        :param open_time: store open time
+        :param close_time: store close time
+        """
         yield env.timeout(open_time)
         now_time = round(env.now, 1)
-        while now_time < end_time:
+        while now_time < close_time:
             now_time = round(env.now,1)
             #받은 주문을 플랫폼에 올리기
             if len(self.resource.users) + len(self.wait_orders) < capacity + self.slack: #플랫폼에 자신이 생각하는 여유 만큼을 게시
@@ -110,6 +131,12 @@ class Store(object):
 
 
     def Cook(self, env, customer, cooking_time_type = 'fixed'):
+        """
+        Occupy the store capacity and cook the order
+        :param env: simpy Env
+        :param customer: class customer
+        :param cooking_time_type: option
+        """
         #print('현재 사용중', len(self.resource.users))
         with self.resource.request() as req:
             yield req #resource를 점유 해야 함.
@@ -121,7 +148,7 @@ class Store(object):
             elif cooking_time_type == 'random':
                 cooking_time = random.randrange(1,self.order_ready_time)
             else:
-                pass
+                cooking_time = 1
             #print(cooking_time, '분 후 ', customer.name, "음식준비완료")
             yield env.timeout(cooking_time)
             #print(self.resource.users)
@@ -142,10 +169,11 @@ def CustomerValueForRiderCalculator(rider, customer):
 
 def RiderChoiceCustomer(rider, customers):
     """
+    Rider pick the highest score orders
     rider의 시각에서 customers 중 가장 높은 가치를 가지는 customer 계산
-    :param rider:
-    :param customers:
-    :return:
+    :param rider: class rider
+    :param customers: customer list [customer, customer,...,]
+    :return: highest score customer class
     """
     customer_values = []
     for customer in customers:
@@ -155,10 +183,16 @@ def RiderChoiceCustomer(rider, customers):
     return customer_values[0][1]
 
 
-
-
-
 def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
+    """
+    Generate customer order
+    :param env: Simpy Env
+    :param orders: Order
+    :param platform: Platform
+    :param stores: Stores
+    :param interval: order gen interval
+    :param end_time: func end time
+    """
     name = 0
     while env.now < end_time:
         #process_time = random.randrange(1,5)
@@ -168,7 +202,7 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         #print('주문확인', orders[name], type(orders[name]))
-        #platform.append(order)
+        platform.append(order)
         #print('T:', int(env.now), '/큐', len(queue))
         yield env.timeout(interval)
         name += 1
@@ -196,5 +230,5 @@ for rider_name in range(rider_num):
 env.process(ordergenerator(env, Orders, Platform, Store_list, interval = order_interval))
 #rider1 = rider(env,0,Platform, Store_list)
 #rider2 = rider(env,1,Platform, Store_list)
-env.run(200)
+env.run(100)
 #print("queue check",Platform.put_queue)
