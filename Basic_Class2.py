@@ -4,6 +4,8 @@ import random
 import math
 import simpy
 import copy
+import itertools
+
 
 class Customer(object):
     def __init__(self, env, name, input_location, store = 0, end_time = 60, ready_time=3, service_time=3, fee = 1000):
@@ -206,6 +208,145 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         #print('T:', int(env.now), '/큐', len(queue))
         yield env.timeout(interval)
         name += 1
+
+
+def RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres = 1):
+    """
+    Cacluate required b2 and b3 number
+    condition : rho <= thres
+    :param lamda1: current un-selected order
+    :param lamda2: future generated order
+    :param mu1: current rider
+    :param mu2: future rider
+    :param thres: rho thres: system over-load
+    :return: b2, b3
+    """
+    b2 = 0
+    b3 = 0
+    for index in range(lamda1+lamda2):
+        b2 += 1
+        rho = (lamda1 + lamda2 - b2)/(mu1 + mu2)
+        if rho <= thres:
+            return b2, b3
+    for index in range(lamda1+lamda2):
+        b2 -= 1
+        b3 += 1
+        rho = (lamda1 + lamda2 - b2 - b3)/(mu1 + mu2)
+        if rho <= thres:
+            return b2, b3
+    return b2, b3
+
+
+def distance(p1, p2):
+    """
+    Calculate 4 digit rounded euclidean distance between p1 and p2
+    :param p1:
+    :param p2:
+    :return: 4 digit rounded euclidean distance between p1 and p2
+    """
+    euc_dist = math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    return round(euc_dist,4)
+
+
+def RouteTime(orders, route, speed):
+    time = 0
+    locs = {}
+    for order in orders:
+        locs[order.name] = [order.store,'store']
+        locs[order.name + len(orders)] = [order.location,'customer']
+    for index in range(1,len(route)):
+        bf = route[index-1]
+        bf_loc = locs[bf][0]
+        af = route[index]
+        af_loc = locs[af][0]
+        time += distance(bf_loc,af_loc)/speed
+        if locs[af][1] == 'store':
+            time += orders[af].time_info[6]
+        else:
+            time += orders[af].time_info[7]
+    return round(time,4)
+
+
+def FLT_Calculate(orders, names, route, p2, speed):
+    n = len(names)
+    ftds = []
+    feasiblity = True
+    for order_name in names:
+        s = route.index(order_name)
+        e = route.index(order_name + n)
+        ftd = RouteTime(orders, route[s: e + 1], speed)
+        if ftd > p2:
+            return False, []
+        else:
+            ftds.append(ftd)
+    return True, [ftds]
+
+
+def BundleConstruct(orders, names, p2, speed):
+    n = len(names)
+    candi = []
+    for name in names:
+        candi.append(name + n)
+    subset = itertools.combinations(candi, len(candi))
+    feasible_subset = []
+    for route in subset:
+        sequence_feasiblity = True #모든 가게가 고객 보다 앞에 오는 경우.
+        feasible_routes = []
+        for store_name in names:
+            if route.index(store_name) < route.index(store_name + n):
+                pass
+            else:
+                sequence_feasiblity = False
+                break
+        if sequence_feasiblity == True:
+            ftd_feasiblity, ftds = FLT_Calculate(orders, names, route, p2, speed)
+            if ftd_feasiblity == True:
+                feasible_routes.append([route,max(ftds),sum(ftds)/len(ftds), min(ftds), names])
+                #[경로, 최대FTD, 평균FTD, 최소FTD]
+        feasible_routes.sort(operator.itemgetter(2))
+        feasible_subset.append(feasible_routes[0])
+    feasible_subset.sort(operator.itemgetter(2))
+    return feasible_subset[0]
+
+
+
+def Bundle_Search(orders, s, n, p2, speed):
+    B = []
+    for order in orders:
+        d = []
+        dist_thres = p2 - distance(order.store, order.location)/speed
+        for order2 in orders:
+            dist = distance(order.store, order2.store)/speed
+            if order2 != order and dist <= dist_thres:
+                d.append(order2.name)
+        M = itertools.combinations(d,s-1)
+        b = []
+        for m in M:
+            q = m + [order.name]
+            subset_orders = []
+            for name in q:
+                subset_orders.append(orders[name])
+            tem_route_info = BundleConstruct(subset_orders,q, p2, speed)
+            b.append(tem_route_info)
+        if len(b) > 0:
+            b.sort(operator.itemgetter(2))
+            B.append(b[0])
+    #n개의 번들 선택
+    selected_bundles = []
+    selected_orders = []
+    for bundle_info in B:
+        unique = True
+        for name in bundle_info[4]:
+            if name in selected_orders:
+                unique = False
+                break
+        if unique == True:
+            selected_orders.append(bundle_info[4])
+            selected_bundles.append(bundle_info)
+            if selected_bundles >= n:
+                break
+    print("selected bundle#", len(selected_bundles))
+    return selected_bundles
 
 # bracnh test
 #파라메터 부
