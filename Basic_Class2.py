@@ -15,6 +15,7 @@ class Customer(object):
         # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
         self.location = input_location
         self.store = store
+        self.type = 'single_order'
         self.fee = fee
         self.ready_time = None #가게에서 음식이 조리 완료된 시점
 
@@ -86,12 +87,19 @@ class Bundle(object):
     """
     Bundle consists of multiple orders
     """
-    def __init__(self, bundle_name, names, route, ftds):
+    def __init__(self, bundle_name, names, route, ftd_info):
         self.name = bundle_name
+        self.size = len(names)
         self.customer_names = names
         self.routebyname = route
-        self.ftds = ftds
+        self.min_ftd = ftd_info[0]
+        self.average_ftd = ftd_info[1]
+        self.max_ftds = ftd_info[2]
         self.routebycor = None
+        self.gen_t = None
+        self.visit_t = []
+        self.fee = 0
+        self.type = 'bundle'
 
 
 class Store(object):
@@ -266,12 +274,89 @@ def RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres = 1):
     return b2, b3
 
 
-def RequiredBreakBundleNum(b2, b3, lamda1, lamda2, mu1, mu2, thres = 1):
+def RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres = 1):
+    """
+    Caclculate availiable break-down bundle number
+    :param platform_set: orders set : [order,...]
+    :param lamda2: expected lamda of the near future time slot
+    :param mu1: current mu
+    :param mu2: expected mu of the near future time slot
+    :param thres: system level.
+    :return:
+    """
+    org_b2_num = 0
+    org_b3_num = 0
+    b2_num = 0
+    b3_num = 0
+    customer_num = 0
+    for order in platform_set:
+        if order.type == 'bundle':
+            if order.size == 2:
+                b2_num += 1
+                org_b2_num += 1
+            else:
+                b3_num += 1
+                org_b3_num += 1
+        else:
+            customer_num += 1
+    end_para = False
+    for count in range(org_b3_num): #break b3 first
+        if b3_num > 0:
+            b3_num -= 1
+            customer_num += 3
+        else:
+            pass
+        p = CalculateRho(b2_num + b3_num + customer_num, lamda2, mu1, mu2)
+        if p >= thres:
+            end_para = True
+            break
+    if end_para == False: #if p < thres, than break b2
+        for count in range(org_b2_num):
+            if b2_num > 0:
+                b2_num -= 1
+                customer_num += 2
+            else:
+                pass
+            p = CalculateRho(b2_num + b3_num + customer_num, lamda2, mu1, mu2)
+            if p >= thres:
+                break
+    return [org_b2_num,org_b3_num],[b2_num, b3_num]
 
 
-
-
-
+def BreakBundle(break_info, platform_set, customer_set):
+    """
+    Break bundle by break_info
+    And return the revised platform_set
+    :param break_info: bundle breaking info [b2 decrcase num, b2 decrcase num]
+    :param platform_set: orders set : [order,...]
+    :param customer_set: customer set : [customer class,...]
+    :return: breaked platform set
+    """
+    b2 = []
+    b3 = []
+    single_orders = []
+    breaked_customer_names = []
+    for order in platform_set:
+        if order.type == 'bundle':
+            if order.size == 2:
+                b2.append(order)
+            else:
+                b3.append(order)
+        else:
+            single_orders.append(order)
+    b2.sort(key=operator.attrgetter('average_ftd'), reverse=True)
+    b3.sort(key=operator.attrgetter('average_ftd'), reverse=True)
+    for break_b2 in range(min(break_info[0],len(b2))):
+        breaked_customer_names.append(b2[0].customer_names)
+        del b2[0]
+    for break_b3 in range(min(break_info[1],len(b3))):
+        breaked_customer_names.append(b3[0].customer_names)
+        del b3[0]
+    breaked_customers = []
+    for customer_name in breaked_customer_names:
+        breaked_customers.append(customer_set[customer_name])
+    res = single_orders + b2 + b3 + breaked_customers
+    return res
 
 
 def distance(p1, p2):
@@ -403,7 +488,6 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
             for name in q:
                 subset_orders.append(orders[name])
             tem_route_info = BundleConsist(subset_orders, p2, speed)
-            #[[route,max(ftds),sum(ftds)/len(ftds), min(ftds), names],...,]
             b.append(tem_route_info)
         if len(b) > 0:
             b.sort(operator.itemgetter(2))
@@ -412,6 +496,7 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
     selected_bundles = []
     selected_orders = []
     for bundle_info in B:
+        # bundle_info = [[route,max(ftds),average(ftds), min(ftds), names],...,]
         unique = True
         for name in bundle_info[4]:
             if name in selected_orders:
@@ -487,7 +572,7 @@ def PlatformOrderRevise(bundles, customer_set):
     bundle_names = []
     names = []
     for bundle in bundles:
-        bundle_names.append(bundle.name)
+        bundle_names.append(bundle.customer_names)
     for customer_name in unpicked_orders:
         if customer_name not in bundle_names:
             names.append(customer_name)
@@ -503,11 +588,11 @@ def PlatformOrderRevise(bundles, customer_set):
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000):
     while env.now <= end_t:
         now_t = env.now
-        p = CalculateRho()
-        unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval ,return_type = 'class') #lamda1
+        unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval = interval ,return_type = 'class') #lamda1
         lamda1 = len(unpicked_orders)
-        idle_riders,mu2 = CountIdleRiders(riders, return_type = 'class')
+        idle_riders, mu2 = CountIdleRiders(riders, interval = interval, return_type = 'class')
         mu1 = len(idle_riders)
+        p = CalculateRho(lamda1, lamda2, mu1, mu2)
         if p >= thres_p:
             if len(lamda1)/3 < mu1 + mu2:
                 b2,b3 = RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres=thres_p)
@@ -517,16 +602,24 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             B = []
             if b2 > 0:
                 b2_bundle = ConstructBundle(orders, 2, b2, p2, speed = speed)
-                B.append(b2_bundle)
+                #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
+                B2 = b2_bundle
             if b3 > 0:
                 b3_bundle = ConstructBundle(orders, 3, b3, p2, speed = speed)
-                B.append(b3_bundle)
+                # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
+                B3 = b3_bundle
+            count = 1
+            for info in B2+B3:
+                B.append(Bundle(count,info[4], info[0],info[1:4]))
             #offer bundle to the rider:
             offered_order = PlatformOrderRevise(B, orders)
             platform_set = offered_order
         else: #Break the offered bundle
-            if offered bundle exist:
-                release offered bundle
+            org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres=thres_p)
+            if sum(rev_bundle_num) < sum(org_bundle_num):
+                break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]]
+                #번들의 해체가 필요
+                platform_set = BreakBundle(break_info, platform_set, orders)
         yield env.timeout(interval)
 
 
