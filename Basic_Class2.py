@@ -82,6 +82,17 @@ class rider(object):
             else: #현재 플랫폼에 주문이 없다면, 아래 시간 만큼 대기 후 다시 탐색 수행
                 yield env.timeout(1)
 
+class Bundle(object):
+    """
+    Bundle consists of multiple orders
+    """
+    def __init__(self, bundle_name, names, route, ftds):
+        self.name = bundle_name
+        self.customer_names = names
+        self.routebyname = route
+        self.ftds = ftds
+        self.routebycor = None
+
 
 class Store(object):
     """
@@ -255,6 +266,14 @@ def RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres = 1):
     return b2, b3
 
 
+def RequiredBreakBundleNum(b2, b3, lamda1, lamda2, mu1, mu2, thres = 1):
+
+
+
+
+
+
+
 def distance(p1, p2):
     """
     Calculate 4 digit rounded euclidean distance between p1 and p2
@@ -384,6 +403,7 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
             for name in q:
                 subset_orders.append(orders[name])
             tem_route_info = BundleConsist(subset_orders, p2, speed)
+            #[[route,max(ftds),sum(ftds)/len(ftds), min(ftds), names],...,]
             b.append(tem_route_info)
         if len(b) > 0:
             b.sort(operator.itemgetter(2))
@@ -455,7 +475,32 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
             interval_riders.append(rider.name)
     return idle_riders, len(interval_riders)
 
-def Platform_process(env, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000):
+
+def PlatformOrderRevise(bundles, customer_set):
+    """
+    Construct unpicked_orders with bundled customer
+    :param bundles: 번들
+    :param customer_set: customer list : [customer class,...,]
+    :return: unserved customer set
+    """
+    unpicked_orders, num = CountUnpickedOrders(customer_set, 0 , interval = 0, return_type = 'name')
+    bundle_names = []
+    names = []
+    for bundle in bundles:
+        bundle_names.append(bundle.name)
+    for customer_name in unpicked_orders:
+        if customer_name not in bundle_names:
+            names.append(customer_name)
+    res = []
+    for customer_name in names:
+        res.append(customer_set[customer_name])
+    res += bundles
+    return res
+
+
+
+
+def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000):
     while env.now <= end_t:
         now_t = env.now
         p = CalculateRho()
@@ -475,12 +520,15 @@ def Platform_process(env, orders, riders, p2,thres_p,interval, speed = 1, end_t 
                 B.append(b2_bundle)
             if b3 > 0:
                 b3_bundle = ConstructBundle(orders, 3, b3, p2, speed = speed)
-                B.append(b2_bundle)
+                B.append(b3_bundle)
             #offer bundle to the rider:
-        else:
+            offered_order = PlatformOrderRevise(B, orders)
+            platform_set = offered_order
+        else: #Break the offered bundle
             if offered bundle exist:
                 release offered bundle
         yield env.timeout(interval)
+
 
 # bracnh test
 #파라메터 부
