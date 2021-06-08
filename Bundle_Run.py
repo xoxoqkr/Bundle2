@@ -6,7 +6,7 @@ import Basic_Class2 as Basic
 
 order_interval = 1
 rider_working_time = 120
-interval = 10
+interval = 5
 p2 = 5
 thres_p = 1
 #실행부
@@ -18,6 +18,7 @@ store_num = 2
 rider_num = 3
 Store_dict = {}
 Rider_dict = {}
+
 for store_name in range(store_num):
     store = Basic.Store(env, Platform, store_name, capacity = 1)
     Store_dict[store_name] = store
@@ -25,7 +26,6 @@ for store_name in range(store_num):
 for rider_name in range(rider_num):
     rider = Basic.rider(env,rider_name,Platform, Store_dict, end_time = rider_working_time)
     Rider_dict[rider_name] = rider
-
 
 env.process(Basic.ordergenerator(env, Orders, Platform, Store_dict, interval = order_interval))
 env.run(120)

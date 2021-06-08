@@ -223,9 +223,8 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         order = Customer(env, name, input_location, store = store_num)
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
-        #print('주문확인', orders[name], type(orders[name]))
+        #print('T:', int(env.now),'주문확인', orders[name], type(orders[name]))
         platform.append(order)
-        #print('T:', int(env.now), '/큐', len(queue))
         yield env.timeout(interval)
         name += 1
 
@@ -622,7 +621,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 platform_set = BreakBundle(break_info, platform_set, orders)
         yield env.timeout(interval)
 
-
+"""
 # bracnh test
 #파라메터 부
 order_interval = 1
@@ -648,3 +647,4 @@ env.process(ordergenerator(env, Orders, Platform, Store_list, interval = order_i
 #rider2 = rider(env,1,Platform, Store_list)
 env.run(100)
 #print("queue check",Platform.put_queue)
+"""
