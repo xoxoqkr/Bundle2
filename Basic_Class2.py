@@ -52,17 +52,17 @@ class rider(object):
         :param end_time: rider exit time. rider will be accept the order until end time.
         """
         while env.now < self.end_time:
-            if len(platform) > 0 and len(self.resource.put_queue) < self.capacity:
-                order = RiderChoiceCustomer(self, platform)  #todo: 라이더가 platform의 주문 중 가장 이윤이 높은 것을 선택.
+            order = RiderChoiceCustomer(self, platform)
+            if len(platform) > 0 and len(self.resource.put_queue) < self.capacity and order != None:
+                #order = RiderChoiceCustomer(self, platform)  #todo: 라이더가 platform의 주문 중 가장 이윤이 높은 것을 선택.
                 #order = platform[0] #큐의 가장 앞에 주문을 잡음.
+                order.time_info[1] = env.now
                 print('현재T:',int(env.now),'/라이더',self.name,"/주문",order.name,'선택')
+                input('정지')
                 store_name = order.store
                 platform.remove(order)
                 stores[store_name].wait_orders.remove(order)
                 move_time = random.randrange(5,12)
-                #move = env.timeout(move_time)
-                #food_ready = env.timeout(stores[store_name].order_ready_time)
-                #env.process(stores[store_name].Cook(env, order))
                 exp_arrival_time = env.now + move_time
                 print('현재T:', int(env.now), '/라이더', self.name, "/주문", order.name,'/가게까지 이동시간', move_time, '조리시간', stores[store_name].order_ready_time)
                 #if len(stores[store_name].resource.users) + len(stores[store_name].wait_orders) > stores[store_name].capacity:
@@ -75,12 +75,15 @@ class rider(object):
                 with self.resource.request() as req:
                     stores[store_name].ready_order.remove(order)
                     req.info = [order.name, round(env.now, 2)]
+                    order.time_info[3] = env.now
                     yield req  # users에 들어간 이후에 작동
                     move_time = random.randrange(1,5)
                     yield env.timeout(move_time)
+                    order.time_info[4] = env.now
                     #stores[store_name].ready_order.remove(order)
                     print('현재T:', int(env.now),'/라이더',self.name,"/주문", order.name,'/이동시간',move_time)
             else: #현재 플랫폼에 주문이 없다면, 아래 시간 만큼 대기 후 다시 탐색 수행
+                print('현재T:', int(env.now),'/라이더',self.name,"/주문X")
                 yield env.timeout(1)
 
 class Bundle(object):
@@ -180,6 +183,27 @@ class Store(object):
             self.ready_order.append(customer)
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
+
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, end_time = 120, interval = 1, runtime = 1000, gen_num = 10):
+    """
+    Generate the rider until t <= runtime and rider_num<= gen_num
+    :param env:
+    :param Rider_dict:
+    :param rider_name:
+    :param Platform:
+    :param Store_dict:
+    :param end_time:
+    :param interval:
+    :param runtime:
+    :param gen_num:
+    """
+    rider_num = 0
+    while env.now <= runtime or rider_num <= gen_num:
+        single_rider = rider(env,rider_num,Platform, Store_dict, end_time = end_time)
+        Rider_dict[rider_num] = single_rider
+        rider_num += 1
+        yield env.timeout(interval)
+
 def CustomerValueForRiderCalculator(rider, customer):
     """
     rider가 customer에 대해 가지는 가치 계산
@@ -199,10 +223,14 @@ def RiderChoiceCustomer(rider, customers):
     """
     customer_values = []
     for customer in customers:
-        value = CustomerValueForRiderCalculator(rider, customer)
-        customer_values.append([value, customer])
+        if customer.time_info[1] == None:
+            value = CustomerValueForRiderCalculator(rider, customer)
+            customer_values.append([value, customer])
     customer_values.sort(key = operator.itemgetter(0), reverse = True)
-    return customer_values[0][1]
+    if len(customer_values) > 0:
+        return customer_values[0][1]
+    else:
+        return None
 
 
 def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
@@ -223,7 +251,7 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         order = Customer(env, name, input_location, store = store_num)
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
-        #print('T:', int(env.now),'주문확인', orders[name], type(orders[name]))
+        print('T:', int(env.now),'주문확인', orders[name], type(orders[name]))
         platform.append(order)
         yield env.timeout(interval)
         name += 1

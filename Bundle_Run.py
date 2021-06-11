@@ -9,6 +9,7 @@ rider_working_time = 120
 interval = 5
 p2 = 5
 thres_p = 1
+run_time = 120
 #실행부
 env = simpy.Environment()
 #Platform = simpy.Store(env)
@@ -23,12 +24,15 @@ for store_name in range(store_num):
     store = Basic.Store(env, Platform, store_name, capacity = 1)
     Store_dict[store_name] = store
 
+env.process(Basic.RiderGenerator(env, Rider_dict, Platform, Store_dict, end_time = 120, interval = 1, runtime = run_time, gen_num = rider_num))
+"""
 for rider_name in range(rider_num):
     rider = Basic.rider(env,rider_name,Platform, Store_dict, end_time = rider_working_time)
     Rider_dict[rider_name] = rider
+"""
 
 env.process(Basic.ordergenerator(env, Orders, Platform, Store_dict, interval = order_interval))
-env.run(120)
+env.run(run_time)
 #env.process(Basic.Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = 1, end_t = 1000))
 """
 #rider1 = rider(env,0,Platform, Store_list)
