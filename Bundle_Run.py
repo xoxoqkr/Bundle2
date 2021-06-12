@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+import random
 import simpy
-import store_class
+#import store_class
 import Basic_Class2 as Basic
 
 
@@ -21,7 +22,9 @@ Store_dict = {}
 Rider_dict = {}
 
 for store_name in range(store_num):
-    store = Basic.Store(env, Platform, store_name, capacity = 1)
+    loc = list(random.sample(range(0,50),2))
+    store = Basic.Store(env, Platform, store_name, loc = loc, capacity = 3)
+    #env.process(store.StoreRunner(env, Platform, capacity=store.capacity))
     Store_dict[store_name] = store
 
 env.process(Basic.RiderGenerator(env, Rider_dict, Platform, Store_dict, end_time = 120, interval = 1, runtime = run_time, gen_num = rider_num))
@@ -32,8 +35,8 @@ for rider_name in range(rider_num):
 """
 
 env.process(Basic.ordergenerator(env, Orders, Platform, Store_dict, interval = order_interval))
+env.process(Basic.Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = 1, end_t = 1000))
 env.run(run_time)
-#env.process(Basic.Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = 1, end_t = 1000))
 """
 #rider1 = rider(env,0,Platform, Store_list)
 #rider2 = rider(env,1,Platform, Store_list)

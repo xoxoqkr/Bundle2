@@ -8,12 +8,13 @@ import itertools
 
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, end_time = 60, ready_time=3, service_time=3, fee = 1000):
+    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 1000):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
         # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
         self.location = input_location
+        self.store_loc = store_loc
         self.store = store
         self.type = 'single_order'
         self.fee = fee
@@ -60,6 +61,7 @@ class rider(object):
                 print('현재T:',int(env.now),'/라이더',self.name,"/주문",order.name,'선택')
                 input('정지')
                 store_name = order.store
+                print('가게정보',stores[store_name].wait_orders)
                 platform.remove(order)
                 stores[store_name].wait_orders.remove(order)
                 move_time = random.randrange(5,12)
@@ -110,8 +112,9 @@ class Store(object):
     Store can received the order.
     Store has capacity. The order exceed the capacity must be wait.
     """
-    def __init__(self, env, platform, name, order_ready_time = 7, capacity = 6, slack = 2):
+    def __init__(self, env, platform, name, loc = [25,25], order_ready_time = 7, capacity = 6, slack = 2):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
+        self.location = loc
         self.order_ready_time = order_ready_time
         self.resource = simpy.Resource(env, capacity = capacity)
         self.slack = slack #자신의 조리 중이 queue가 꽉 차더라도, 추가로 주문을 넣을 수 있는 주문의 수
@@ -132,12 +135,18 @@ class Store(object):
         :param open_time: store open time
         :param close_time: store close time
         """
-        yield env.timeout(open_time)
+        input('가게 주문 채택')
+        #yield env.timeout(open_time)
         now_time = round(env.now, 1)
+        input('가게 주문 채택0')
         while now_time < close_time:
             now_time = round(env.now,1)
             #받은 주문을 플랫폼에 올리기
+            print('값 확인',len(self.resource.users) , len(self.wait_orders), capacity , self.slack)
             if len(self.resource.users) + len(self.wait_orders) < capacity + self.slack: #플랫폼에 자신이 생각하는 여유 만큼을 게시
+                #self.received_orders.append()
+                print('접수된 고객 수', len(self.received_orders))
+                input('가게 주문 채택1')
                 slack = min(capacity + self.slack - len(self.resource.users), len(self.received_orders))
                 if len(self.received_orders) > 0:
                     for count in range(slack):
@@ -147,6 +156,7 @@ class Store(object):
                               capacity - len(self.resource.users),'/조리 중',len(self.resource.users))
                         self.wait_orders.append(order)
                         self.received_orders.remove(order)
+                        input('가게 주문 채택2')
             else: #이미 가게의 능력 최대로 조리 중. 잠시 주문을 막는다(block)
                 #print("가게", self.name, '/',"여유 X", len(self.resource.users),'/주문대기중',len(self.received_orders))
                 pass
@@ -182,6 +192,27 @@ class Store(object):
             customer.ready_time = env.now
             self.ready_order.append(customer)
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
+
+def StoreGenerator(env, Rider_dict, Platform, Store_dict, end_time = 120, interval = 1, runtime = 1000, gen_num = 10):
+    """
+    Generate the rider until t <= runtime and rider_num<= gen_num
+    :param env:
+    :param Rider_dict:
+    :param rider_name:
+    :param Platform:
+    :param Store_dict:
+    :param end_time:
+    :param interval:
+    :param runtime:
+    :param gen_num:
+    """
+    rider_num = 0
+    while env.now <= runtime or rider_num <= gen_num:
+        single_rider = rider(env,rider_num,Platform, Store_dict, end_time = end_time)
+        Rider_dict[rider_num] = single_rider
+        rider_num += 1
+        yield env.timeout(interval)
+
 
 
 def RiderGenerator(env, Rider_dict, Platform, Store_dict, end_time = 120, interval = 1, runtime = 1000, gen_num = 10):
@@ -248,7 +279,7 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         #process_time = random.randrange(1,5)
         input_location = [36,36]
         store_num = random.randrange(0, len(stores))
-        order = Customer(env, name, input_location, store = store_num)
+        order = Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location)
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         print('T:', int(env.now),'주문확인', orders[name], type(orders[name]))
@@ -268,7 +299,7 @@ def CalculateRho(lamda1, lamda2, mu1, mu2, add_lamda = 0, add_mu = 0):
     :param add_mu: additional mu
     :return: rho
     """
-    rho = (lamda1 + lamda2 + add_lamda) / (mu1 + mu2, add_mu)
+    rho = (lamda1 + lamda2 + add_lamda) / (mu1 + mu2 + add_mu)
     return round(rho, 4)
 
 
@@ -500,11 +531,13 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
     :return: constructed bundle set
     """
     B = []
-    for order in orders:
+    for order_name in orders:
+        order = orders[order_name]
         d = []
-        dist_thres = p2 - distance(order.store, order.location)/speed
-        for order2 in orders:
-            dist = distance(order.store, order2.store)/speed
+        dist_thres = p2 - distance(order.store_loc, order.location)/speed
+        for order2_name in orders:
+            order2 = orders[order2_name]
+            dist = distance(order.store_loc, order2.store_loc)/speed
             if order2 != order and dist <= dist_thres:
                 d.append(order2.name)
         M = itertools.combinations(d,s-1)
@@ -549,7 +582,8 @@ def CountUnpickedOrders(orders, now_t , interval = 10, return_type = 'class'):
     """
     unpicked_orders = []
     interval_orders = []
-    for order in orders:
+    for order_name in orders:
+        order = orders[order_name]
         if order.time_info[1] == None:
             if return_type == 'class':
                 unpicked_orders.append(order)
@@ -557,8 +591,8 @@ def CountUnpickedOrders(orders, now_t , interval = 10, return_type = 'class'):
                 unpicked_orders.append(order.name)
             else:
                 pass
-        if now_t- interval <= rider.start_time < now_t:
-            interval_orders.append(rider.name)
+        if now_t- interval <= order.time_info[0] < now_t:
+            interval_orders.append(order.name)
     return unpicked_orders, len(interval_orders)
 
 
@@ -573,8 +607,9 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     """
     idle_riders = []
     interval_riders = []
-    for rider in riders:
+    for rider_name in riders:
         #Count current idle rider
+        rider = riders[rider_name]
         if len(rider.resource.users) == 0:
             if return_type == 'class':
                 idle_riders.append(rider)
@@ -613,19 +648,23 @@ def PlatformOrderRevise(bundles, customer_set):
 
 
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000):
+    B2 = []
+    B3 = []
     while env.now <= end_t:
         now_t = env.now
         unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval = interval ,return_type = 'class') #lamda1
         lamda1 = len(unpicked_orders)
-        idle_riders, mu2 = CountIdleRiders(riders, interval = interval, return_type = 'class')
+        idle_riders, mu2 = CountIdleRiders(riders, now_t, interval = interval, return_type = 'class')
         mu1 = len(idle_riders)
+        print(lamda1, lamda2, mu1, mu2)
+        input('확인2')
         p = CalculateRho(lamda1, lamda2, mu1, mu2)
         if p >= thres_p:
-            if len(lamda1)/3 < mu1 + mu2:
+            if lamda1/3 < mu1 + mu2:
                 b2,b3 = RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres=thres_p)
             else:
                 b2 = 0
-                b3 = int(len(lamda1)/3)
+                b3 = int(lamda1/3)
             B = []
             if b2 > 0:
                 b2_bundle = ConstructBundle(orders, 2, b2, p2, speed = speed)
@@ -636,8 +675,11 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B3 = b3_bundle
             count = 1
+            print('B2:', B2, 'B3:',B3)
+            input('B2,B3확인')
             for info in B2+B3:
                 B.append(Bundle(count,info[4], info[0],info[1:4]))
+                count += 1
             #offer bundle to the rider:
             offered_order = PlatformOrderRevise(B, orders)
             platform_set = offered_order
