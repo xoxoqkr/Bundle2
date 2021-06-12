@@ -63,7 +63,7 @@ class rider(object):
                 store_name = order.store
                 print('가게정보',stores[store_name].wait_orders)
                 platform.remove(order)
-                stores[store_name].wait_orders.remove(order)
+                #stores[store_name].wait_orders.remove(order)
                 move_time = random.randrange(5,12)
                 exp_arrival_time = env.now + move_time
                 print('현재T:', int(env.now), '/라이더', self.name, "/주문", order.name,'/가게까지 이동시간', move_time, '조리시간', stores[store_name].order_ready_time)
@@ -135,21 +135,25 @@ class Store(object):
         :param open_time: store open time
         :param close_time: store close time
         """
-        input('가게 주문 채택')
+        #input('가게 주문 채택')
         #yield env.timeout(open_time)
         now_time = round(env.now, 1)
-        input('가게 주문 채택0')
+        #input('가게 주문 채택0')
         while now_time < close_time:
             now_time = round(env.now,1)
             #받은 주문을 플랫폼에 올리기
-            print('값 확인',len(self.resource.users) , len(self.wait_orders), capacity , self.slack)
-            if len(self.resource.users) + len(self.wait_orders) < capacity + self.slack: #플랫폼에 자신이 생각하는 여유 만큼을 게시
+            print('값 확인',len(self.resource.users) , len(self.wait_orders), capacity , self.slack,len(self.received_orders))
+            if len(self.resource.users) + len(self.resource.put_queue) < capacity + self.slack:  # 플랫폼에 자신이 생각하는 여유 만큼을 게시
+            #if len(self.resource.users) + len(self.wait_orders) < capacity + self.slack: #플랫폼에 자신이 생각하는 여유 만큼을 게시
                 #self.received_orders.append()
-                print('접수된 고객 수', len(self.received_orders))
-                input('가게 주문 채택1')
-                slack = min(capacity + self.slack - len(self.resource.users), len(self.received_orders))
-                if len(self.received_orders) > 0:
-                    for count in range(slack):
+                #print('접수된 고객 수', len(self.received_orders))
+                #input('가게 주문 채택1')
+                #slack = min(capacity + self.slack - len(self.resource.users), len(self.received_orders))
+                slack = capacity + self.slack - len(self.resource.users)
+                print('잔여 용량', slack,'대기 고객',len(self.received_orders))
+                received_orders_num = len(self.received_orders)
+                if received_orders_num > 0:
+                    for count in range(min(slack,received_orders_num)):
                         order = self.received_orders[0] #앞에서 부터 플랫폼에 주문 올리기
                         platform.append(order)
                         print('현재T:', int(env.now), '/가게', self.name, '/주문', order.name, '플랫폼에 접수/조리대 여유:',
@@ -161,7 +165,7 @@ class Store(object):
                 #print("가게", self.name, '/',"여유 X", len(self.resource.users),'/주문대기중',len(self.received_orders))
                 pass
             #만약 현재 조리 큐가 꽉차는 경우에는 주문을 더이상 처리하지 X
-            yield env.timeout(0.5)
+            yield env.timeout(0.1)
         #print("T",int(env.now),"접수 된 주문", self.received_orders)
 
 
@@ -283,6 +287,7 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         print('T:', int(env.now),'주문확인', orders[name], type(orders[name]))
+        print('가게 큐', stores[store_num].received_orders)
         platform.append(order)
         yield env.timeout(interval)
         name += 1
