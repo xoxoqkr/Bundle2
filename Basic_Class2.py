@@ -23,7 +23,7 @@ class Customer(object):
 
 
 class rider(object):
-    def __init__(self, env, name, platform, stores, capacity = 3, end_time = 1000):
+    def __init__(self, env, name, platform, stores, speed = 1, capacity = 3, end_time = 1000):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.start_time = int(env.now)
         self.resource = simpy.Resource(env, capacity = capacity)
@@ -31,16 +31,19 @@ class rider(object):
         self.capacity = capacity
         self.end = False
         self.end_time = env.now + end_time
+        self.speed = speed
+        self.last_loc = [25,25]
         env.process(self.Runner(env, platform,stores))
 
 
-    def RiderMoving(self, env, time):
+    def RiderMoving(self, env, time, loc):
         """
         라이더가 움직이는 시간의 env.time의 generator를 반환
         :param env: simpy.env
         :param time: 라이더가 움직이는 시간
         """
         yield env.timeout(time)
+        self.last_loc = loc
         print('현재T:',int(env.now),"/라이더 ",self.name,"가게 도착")
 
     def Runner(self, env, platform, stores, ready_time = 2):
@@ -64,12 +67,13 @@ class rider(object):
                 print('가게정보',stores[store_name].wait_orders)
                 platform.remove(order)
                 #stores[store_name].wait_orders.remove(order)
-                move_time = random.randrange(5,12)
+                #move_time = random.randrange(5,12)
+                move_time = distance(self.last_loc, order.store_loc) / self.speed
                 exp_arrival_time = env.now + move_time
                 print('현재T:', int(env.now), '/라이더', self.name, "/주문", order.name,'/가게까지 이동시간', move_time, '조리시간', stores[store_name].order_ready_time)
                 #if len(stores[store_name].resource.users) + len(stores[store_name].wait_orders) > stores[store_name].capacity:
                 #    print('음식점이 조리 불가','라이더',self.name,"주문 ", order.name,'/현재시간',int(env.now))
-                yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_time)) #둘 중 더 오래 걸리는 process가 완료 될 때까지 기다림
+                yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_time, order.store_loc)) #둘 중 더 오래 걸리는 process가 완료 될 때까지 기다림
                 rider_wait_time = max(0, env.now - exp_arrival_time)
                 food_wait_time = max(0, env.now - order.ready_time)
                 #print(env.now - exp_arrival_time, env.now - order.ready_time)
@@ -79,11 +83,13 @@ class rider(object):
                     req.info = [order.name, round(env.now, 2)]
                     order.time_info[3] = env.now
                     yield req  # users에 들어간 이후에 작동
-                    move_time = random.randrange(1,5)
+                    #move_time = random.randrange(1,5)
+                    move_time = distance(order.store_loc, order.location)/self.speed
                     yield env.timeout(move_time)
                     order.time_info[4] = env.now
+                    self.last_loc = order.location
                     #stores[store_name].ready_order.remove(order)
-                    print('현재T:', int(env.now),'/라이더',self.name,"/주문", order.name,'/이동시간',move_time)
+                    print('현재T:', int(env.now),'/라이더',self.name,"/배달 완료/ 고객:", order.name,'/이동시간',move_time)
             else: #현재 플랫폼에 주문이 없다면, 아래 시간 만큼 대기 후 다시 탐색 수행
                 print('현재T:', int(env.now),'/라이더',self.name,"/주문X")
                 yield env.timeout(1)
@@ -281,7 +287,8 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
     name = 0
     while env.now < end_time:
         #process_time = random.randrange(1,5)
-        input_location = [36,36]
+        #input_location = [36,36]
+        input_location = random.sample(list(range(50)),2)
         store_num = random.randrange(0, len(stores))
         order = Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location)
         orders[name] = order
