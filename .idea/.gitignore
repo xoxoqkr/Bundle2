@@ -2,7 +2,11 @@
 /shelf/
 /workspace.xml
 # Datasource local storage ignored files
+<<<<<<< 9b3ca847bc9973592100de80081fcb4b6690c029
 /../../../../../../:\Users\xoxoq\PycharmProjects\Bundle2\.idea/dataSources/
+=======
+/../../../../../../../:\Users\xoxoq\OneDrive\pythonProject\pythonProject\.idea/dataSources/
+>>>>>>> 뭐지
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
