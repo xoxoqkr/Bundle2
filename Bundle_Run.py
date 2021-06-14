@@ -22,6 +22,9 @@ Store_dict = {}
 Rider_dict = {}
 rider_gen_interval = 10
 
+#commit test
+
+
 #Before simulation, generate the stores.
 for store_name in range(store_num):
     loc = list(random.sample(range(0,50),2))
