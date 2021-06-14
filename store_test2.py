@@ -1,5 +1,12 @@
+# -*- coding: utf-8 -*-
+
 import simpy  ## 시뮬레이션에 사용하기 위한 라이브러리
 from simpy.events import AnyOf, AllOf, Event
+
+
+
+
+
 
 
 def generator1(env):
