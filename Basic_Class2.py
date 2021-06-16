@@ -276,6 +276,7 @@ def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
         #print('가게 큐', stores[store_num].received_orders)
         platform.append(order)
         yield env.timeout(interval)
+        print('현재 {} 플랫폼 주문 수 {}'.format(int(env.now), len(platform)))
         name += 1
 
 
@@ -430,10 +431,19 @@ def RouteTime(orders, route, M = 1000, speed = 1):
     time = 0
     locs = {}
     names = []
-    for order in orders:
-        locs[order.name + M] = [order.store_loc,'store', order.time_info[6]]
-        locs[order.name] = [order.location,'customer', order.time_info[7]]
-        names += [order.name + M, order.name]
+    if type(orders) == dict:
+        for order_name in orders:
+            locs[order_name + M] = [orders[order_name].store_loc, 'store', orders[order_name].time_info[6]]
+            locs[order_name] = [orders[order_name].location, 'customer', orders[order_name].time_info[7]]
+            names += [order_name + M, order_name]
+    elif type(orders) == list:
+        for order in orders:
+            locs[order.name + M] = [order.store_loc, 'store', order.time_info[6]]
+            locs[order.name] = [order.location, 'customer', order.time_info[7]]
+            names += [order.name + M, order.name]
+    else:
+        input('Error')
+
     #print('정보',locs)
     #print('이름들', names)
     for index in range(1,len(route)):
@@ -455,7 +465,7 @@ def RouteTime(orders, route, M = 1000, speed = 1):
     return round(time,4)
 
 
-def FLT_Calculate(orders, route, p2, M = 1000, speed = 1):
+def FLT_Calculate(orders, route, p2, M = 1000, speed = 1, add_time = None):
     """
     Calculate the customer`s Food Delivery Time in route(bundle)
 
@@ -470,10 +480,13 @@ def FLT_Calculate(orders, route, p2, M = 1000, speed = 1):
         names.append(order.name)
     ftds = []
     for order_name in names:
+        rev_p2 = p2
+        if add_time != None:
+            rev_p2 = p2 - add_time[order_name]
         s = route.index(order_name + M)
         e = route.index(order_name)
         ftd = RouteTime(orders, route[s: e + 1], speed = speed, M = M)
-        if ftd > p2:
+        if ftd > rev_p2:
             return False, []
         else:
             ftds.append(ftd)
