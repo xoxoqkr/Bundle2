@@ -7,6 +7,13 @@ import copy
 import itertools
 
 
+class Order(object):
+    def __init__(self, order_name, customer_names, route, type = '1'):
+        self.name = order_name
+        self.customers = customer_names
+        self.route = route
+        self.type = type #1:단주문, 2:B2, 3:B3
+
 class Customer(object):
     def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 1000):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
@@ -118,7 +125,7 @@ class Store(object):
     Store can received the order.
     Store has capacity. The order exceed the capacity must be wait.
     """
-    def __init__(self, env, platform, name, loc = [25,25], order_ready_time = 7, capacity = 6, slack = 2):
+    def __init__(self, env, platform, name, loc = [25,25], order_ready_time = 7, capacity = 6, slack = 2, print_para = True):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.location = loc
         self.order_ready_time = order_ready_time
@@ -129,10 +136,10 @@ class Store(object):
         self.ready_order = []
         self.loaded_order = []
         self.capacity = capacity
-        env.process(self.StoreRunner(env, platform, capacity = capacity))
+        env.process(self.StoreRunner(env, platform, capacity = capacity, print_para= print_para))
 
 
-    def StoreRunner(self, env, platform, capacity, open_time = 1, close_time = 900):
+    def StoreRunner(self, env, platform, capacity, open_time = 1, close_time = 900, print_para = True):
         """
         Store order cooking process
         :param env: simpy Env
@@ -162,8 +169,8 @@ class Store(object):
                     for count in range(min(slack,received_orders_num)):
                         order = self.received_orders[0] #앞에서 부터 플랫폼에 주문 올리기
                         platform.append(order)
-                        print('현재T:', int(env.now), '/가게', self.name, '/주문', order.name, '플랫폼에 접수/조리대 여유:',
-                              capacity - len(self.resource.users),'/조리 중',len(self.resource.users))
+                        if print_para == True:
+                            print('현재T:', int(env.now), '/가게', self.name, '/주문', order.name, '플랫폼에 접수/조리대 여유:',capacity - len(self.resource.users),'/조리 중',len(self.resource.users))
                         self.wait_orders.append(order)
                         self.received_orders.remove(order)
                         #input('가게 주문 채택2')
@@ -444,8 +451,8 @@ def RouteTime(orders, route, M = 1000, speed = 1):
     else:
         input('Error')
 
-    #print('정보',locs)
-    #print('이름들', names)
+    print('정보',locs)
+    print('이름들', names)
     for index in range(1,len(route)):
         bf = route[index-1]
         bf_loc = locs[bf][0]
