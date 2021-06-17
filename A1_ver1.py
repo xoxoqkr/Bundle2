@@ -59,7 +59,7 @@ class Rider(object):
                     yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_t))
                     #yield env.process(stores[store_name].Cook(env, order)) & env.timeout(move_t)  # 둘 중 더 오래 걸리는 process가 완료 될 때까지 기다림
                     print('T: {} 노드 {} kick2'.format(int(env.now), node_info))
-                    del self.route[0]
+                    self.visited_route.append(self.route[0])
                     if node_info[1] == 0: #가게인 경우
                         print('가게 도착')
                         self.container.append(node_info[0])
@@ -70,6 +70,7 @@ class Rider(object):
                         self.onhand.remove(node_info[0])
                         self.served.append(node_info[0])
                     print('T: {} 노드 {} 도착'.format(int(env.now), node_info))
+                    del self.route[0]
                     if len(self.onhand) < self.capacity:
                         print('T{} 추가 탐색 시작'.format(env.now))
                         order_info = self.OrderSelect(platform, customers, self.route)
@@ -77,22 +78,31 @@ class Rider(object):
                             print('체크2_기 추가', order_info)
                             input('체크')
                             order = Platform[order_info[0]]
-                            self.OrderPcik(order, customers)
+                            self.OrderPcik(order, order_info[1])
                         else:
                             pass
+
             else:
                 order_info = self.OrderSelect(platform, customers, [])
                 print('현재 {} 라이더 경로 {} -> 빈 상태 {} 추가'.format(int(env.now), self.route, order_info))
                 input('체크')
                 if order_info != None:
                     order = Platform[order_info[0]]
-                    self.OrderPcik(order, customers)
+                    self.OrderPcik(order, order_info[1])
                     print('라이더 {} -> 경로 {} 할당 '.format(self.name, self.route))
                 else:
                     yield env.timeout(5)
                     print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) -5, int(env.now) ))
 
+
     def OrderSelect(self, platform, customers, route):
+        """
+        route를 운행하는 라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
+        @param platform: {class order, ...}
+        @param customers:
+        @param route:
+        @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
+        """
         if len(route) > 0:
             #subsets = itertools.combinations(list(platform.keys()), n)
             score = []
@@ -103,6 +113,7 @@ class Rider(object):
                     score.append([order.index] + route_info)
             if len(score) > 0:
                 score.sort(key = operator.itemgetter(6))
+                input('최단경로 실행1/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
                 return score[0]
             else:
                 return None
@@ -110,20 +121,16 @@ class Rider(object):
             score = []
             for order in platform:
                 if order.picked == False:
-                    if order.type == 1:
-                        print('order type 1')
-                        customer = customers[order.customers[0]]
-                        dist = Basic.distance(self.last_departure_loc, customer.store_loc)
-                        score.append([order.index,[customer.name], dist])
-                    else:
-                        print('order type 2')
-                        route_info = self.ShortestRoute(order, customers, [])
-                        if route_info != None:
-                            score_info = [order.index, route_info[4],route_info[5]]
-                            score.append(score_info)
+                    print('order type 2')
+                    route_info = self.ShortestRoute(order, customers, [])
+                    #input('최단경로 결과2 {}'.format(route_info))
+                    if route_info != None:
+                        score_info = [order.index, route_info[0],route_info[5]]
+                        score.append(score_info)
             if len(score) > 0:
-                print('스코어', score)
+                #print('스코어', score)
                 score.sort(key = operator.itemgetter(2))
+                input('최단경로 실행2/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
                 return score[0]
             else:
                 return None
@@ -131,23 +138,29 @@ class Rider(object):
 
     def ShortestRoute(self, order, customers, input_route, now_t = 0, p2 = 0, speed = 1, M = 1000):
         prior_route = []
-        for node in input_route:
-            for visitied_node in self.visited_route:
+        #input('주문 {} 고객정보 {} /이미 방문 경로 {}/ 남은 경로 {}'.format(order.index, order.customers, self.visited_route, self.route))
+        for visitied_node in self.visited_route:
+            for node in input_route:
+        #for node in input_route:
+        #    for visitied_node in self.visited_route:
                 if node[0] == visitied_node[0]:
                     prior_route.append(visitied_node[0] + M)
                     break
-        prior_route.sort(key = operator.itemgetter(4))
+        #input('기 방문 노드 {}'.format(prior_route))
         order_names = []  # 가게 이름?
         store_names = []
         for customer_name in order.customers:
             order_names.append(customer_name)
             store_names.append(customer_name + M)
+        #input('주문 목록1 {} /가게 목록1 {}'.format(order_names, store_names))
         for node_info in input_route:
-            if node_info[1] == 0:
+            if node_info[1] == 1:
                 order_names.append(node_info[0])
             else:
                 store_names.append(node_info[0] + M)
         candi = order_names + store_names
+        #input('주문 목록2 {} /가게 목록2 {}'.format(order_names, store_names))
+        #input('이미 방문한 노드 {} /삽입 대상 {}'.format(prior_route, candi))
         subset = itertools.permutations(candi, len(candi))
         feasible_subset = []
         for route_part in subset:
@@ -173,6 +186,7 @@ class Rider(object):
                         if info[0] not in order_customers_names:
                             order_customers.append(customers[info[0]])
                             order_customers_names.append(info[0])
+                # todo: 추가된 경로로 인한 FLT을 측정.
                 """
                 ftd_feasiblity, ftds = Basic.FLT_Calculate(order_customers, route, p2, M=M, speed=speed, add_time= add_time)
                 if ftd_feasiblity == True:
@@ -184,17 +198,20 @@ class Rider(object):
                 """
                 #print('주문 확인', order_customers)
                 #input('체크3')
-                #route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M) #todo: 이미 수행된 경로(route)에 대해서는 시간을 제외해야함.
+                #route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M)
                 route_time = Basic.RouteTime(order_customers, list(route_part), speed=speed, M=M)
                 rev_route = []
                 for node in route:
-                    if node < M:
-                        name = node
-                        info = [name, 1, customers[name].location,0]
-                    else:
-                        name = node - M
-                        info = [name, 0, customers[name].store_loc, 0]
-                    rev_route.append(info)
+                    if node not in prior_route:
+                        #print('node', node)
+                        if node < M:
+                            name = node
+                            info = [name, 1, customers[name].location,0]
+                        else:
+                            name = node - M
+                            info = [name, 0, customers[name].store_loc, 0]
+                        rev_route.append(info)
+                #input('기존 경로 중 {} 제외 경로 {} -> 추가될 경로 {}'.format(route,prior_route,rev_route))
                 feasible_routes.append([rev_route, None, None, None, order_names, route_time])
             if len(feasible_routes) > 0:
                 feasible_routes.sort(key=operator.itemgetter(5)) #가장 짧은 거리의 경로 선택.
@@ -207,19 +224,22 @@ class Rider(object):
         else:
             return []
 
-    def OrderPcik(self, order, customers):
+    def OrderPcik(self, order, route):
         order.picked = True
+        """
         if order.type == 1:
             customer = customers[order.customers[0]]
             names = [customer.name]
             route = [[customer.name, 0, customer.store_loc, 0], [customer.name, 1, customer.location, 0]]
         else:
             names = customers[order.customers]
-            route = order.route
-        print('orderpick 경로확인',route, names)
-        self.route += route
+            route = order.route        
+        """
+        names = order.customers
+        print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
+        self.route = route
         self.onhand += names
-        print('orderpick 경로확인2', self.route, self.onhand)
+        print('수정후 경로 {}/ 보유 고객 {}'.format(self.route, self.onhand))
 
 class Store(object):
     """
