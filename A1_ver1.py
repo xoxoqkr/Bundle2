@@ -129,9 +129,9 @@ class Rider(object):
                 return None
 
 
-    def ShortestRoute(self, order, customers, route, now_t = 0, p2 = 0, speed = 1, M = 1000):
+    def ShortestRoute(self, order, customers, input_route, now_t = 0, p2 = 0, speed = 1, M = 1000):
         prior_route = []
-        for node in route:
+        for node in input_route:
             for visitied_node in self.visited_route:
                 if node[0] == visitied_node[0]:
                     prior_route.append(visitied_node[0] + M)
@@ -142,7 +142,7 @@ class Rider(object):
         for customer_name in order.customers:
             order_names.append(customer_name)
             store_names.append(customer_name + M)
-        for node_info in route:
+        for node_info in input_route:
             if node_info[1] == 0:
                 order_names.append(node_info[0])
             else:
@@ -184,7 +184,8 @@ class Rider(object):
                 """
                 #print('주문 확인', order_customers)
                 #input('체크3')
-                route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M)
+                #route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M) #todo: 이미 수행된 경로(route)에 대해서는 시간을 제외해야함.
+                route_time = Basic.RouteTime(order_customers, list(route_part), speed=speed, M=M)
                 rev_route = []
                 for node in route:
                     if node < M:
