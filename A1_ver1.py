@@ -7,6 +7,9 @@ import Basic_Class2 as Basic
 import random
 import copy
 
+
+# customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
+# 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
 class Order(object):
     def __init__(self, order_name, customer_names, route, order_type):
         self.index = order_name
@@ -16,7 +19,7 @@ class Order(object):
         self.type = order_type #1:단주문, 2:B2, 3:B3
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, speed = 1, capacity = 3, end_t = 120):
+    def __init__(self, env, i, platform, customers, stores, speed = 1, capacity = 3, end_t = 120, p2= 15):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
@@ -30,7 +33,8 @@ class Rider(object):
         self.last_departure_loc = [25,25]
         self.container = []
         self.served = []
-        env.process(self.RunProcess(env, platform, customers, stores))
+        self.p2 = p2
+        env.process(self.RunProcess(env, platform, customers, stores, self.p2))
 
 
     def RiderMoving(self, env, time):
@@ -40,14 +44,26 @@ class Rider(object):
         :param time: 라이더가 움직이는 시간
         """
         yield env.timeout(time)
-        print('현재T:',int(env.now),"/라이더 ",self.name,"가게 도착")
+        #print('현재1 T:{} 라이더{} 가게 {} 도착'.format(int(env.now),self.name, info ))
 
-    def RunProcess(self, env, platform, customers, stores):
+
+    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 5):
+        """
+        라이더의 행동 과정을 정의.
+        1)주문 선택
+        2)선택할만 한 주문이 없는 경우 대기(wait time)
+        @param env:
+        @param platform:
+        @param customers:
+        @param stores:
+        @param p2:
+        @param wait_time:
+        """
         while int(env.now) < self.end_t:
             if len(self.route) > 0:
                 node_info = self.route[0]
-                print('T: {} 노드 정보 {}'.format(int(env.now),node_info) )
-                input('체크1')
+                print('T: {} 노드 정보 {} 경로 {}'.format(int(env.now),node_info,self.route))
+                #('체크1')
                 order = customers[node_info[0]]
                 store_name = order.store
                 move_t = Basic.distance(self.last_departure_loc, node_info[2]) / self.speed
@@ -55,97 +71,104 @@ class Rider(object):
                     print('T: {} 노드 {} 시작'.format(int(env.now), node_info))
                     yield req  # users에 들어간 이후에 작동
                     print('T: {} 노드 {} kick1: 이동시간{}'.format(int(env.now), node_info, move_t))
-                    #yield env.timeout(move_t)
-                    yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_t))
-                    #yield env.process(stores[store_name].Cook(env, order)) & env.timeout(move_t)  # 둘 중 더 오래 걸리는 process가 완료 될 때까지 기다림
-                    print('T: {} 노드 {} kick2'.format(int(env.now), node_info))
-                    self.visited_route.append(self.route[0])
                     if node_info[1] == 0: #가게인 경우
-                        print('가게 도착')
+                        yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_t))
+                        print('현재2 T:{} 라이더{} 가게 {} 도착'.format(int(env.now), self.name, customers[node_info[0]].store))
                         self.container.append(node_info[0])
+                        order.time_info[2] = env.now
                     else:#고객인 경우
-                        print('고객 도착')
+                        input('T: {} 고객 {} 이동 시작'.format(int(env.now),node_info[0]))
+                        yield env.process(self.RiderMoving(env, move_t))
+                        print('T: {} 고객 {} 도착'.format(int(env.now),node_info[0]))
                         input('체크5')
+                        order.time_info[3] = env.now
                         self.container.remove(node_info[0])
                         self.onhand.remove(node_info[0])
                         self.served.append(node_info[0])
-                    print('T: {} 노드 {} 도착'.format(int(env.now), node_info))
+                    print('T: {} 노드 {} 도착 '.format(int(env.now), node_info))
+                    self.last_departure_loc = self.route[0][2]
+                    self.visited_route.append(self.route[0])
                     del self.route[0]
-                    if len(self.onhand) < self.capacity:
-                        print('T{} 추가 탐색 시작'.format(env.now))
-                        order_info = self.OrderSelect(platform, customers, self.route)
-                        if order_info != None:
-                            print('체크2_기 추가', order_info)
-                            input('체크')
-                            order = Platform[order_info[0]]
-                            self.OrderPcik(order, order_info[1])
-                        else:
-                            pass
-
-            else:
-                order_info = self.OrderSelect(platform, customers, [])
-                print('현재 {} 라이더 경로 {} -> 빈 상태 {} 추가'.format(int(env.now), self.route, order_info))
-                input('체크')
+                    print('남은 경로 {}'.format(self.route))
+            if len(self.onhand) < self.capacity:
+                print('T{} 추가 탐색 시작'.format(env.now))
+                order_info = self.OrderSelect(platform, customers, p2 = p2)
                 if order_info != None:
-                    order = Platform[order_info[0]]
-                    self.OrderPcik(order, order_info[1])
-                    print('라이더 {} -> 경로 {} 할당 '.format(self.name, self.route))
+                    print('체크2_기 추가', order_info)
+                    #input('체크')
+                    added_order = Platform[order_info[0]]
+                    self.OrderPick(added_order, order_info[1], customers, env.now)
                 else:
-                    yield env.timeout(5)
-                    print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) -5, int(env.now) ))
+                    yield env.timeout(wait_time)
+                    print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - 5, int(env.now)))
 
 
-    def OrderSelect(self, platform, customers, route):
+    def OrderSelect(self, platform, customers, p2 = 0, sort_standard = 6):
         """
-        route를 운행하는 라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
-        @param platform: {class order, ...}
-        @param customers:
-        @param route:
+        라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
+        1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
+        2)주문들 중 최단 경로가 가장 짧은 주문 선택
+        *Note : 선택하는 주문에 추가적인 조건이 걸리는 경우 ShortestRoute 추가적인 조건을 삽입할 수 있음.
+        @param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+        @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+        @param p2: 허용 Food Lead Time의 최대 값
+        @param sort_standard: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
         @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
         """
-        if len(route) > 0:
-            #subsets = itertools.combinations(list(platform.keys()), n)
-            score = []
-            for order in platform:
-                #현재의 경로를 반영한 비용
-                if order.picked == False:
-                    route_info = self.ShortestRoute(order, customers, route)
+        score = []
+        for order in platform:
+            # 현재의 경로를 반영한 비용
+            exp_onhand_order = order.customers + self.onhand
+            if order.picked == False and len(exp_onhand_order) <= self.capacity:
+                route_info = self.ShortestRoute(order, customers, p2=p2)
+                if len(route_info) > 0:
                     score.append([order.index] + route_info)
-            if len(score) > 0:
-                score.sort(key = operator.itemgetter(6))
-                input('최단경로 실행1/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
-                return score[0]
-            else:
-                return None
-        else: #주문 중 최고점 주문을 선택
-            score = []
-            for order in platform:
-                if order.picked == False:
-                    print('order type 2')
-                    route_info = self.ShortestRoute(order, customers, [])
-                    #input('최단경로 결과2 {}'.format(route_info))
-                    if route_info != None:
-                        score_info = [order.index, route_info[0],route_info[5]]
-                        score.append(score_info)
-            if len(score) > 0:
-                #print('스코어', score)
-                score.sort(key = operator.itemgetter(2))
-                input('최단경로 실행2/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
-                return score[0]
-            else:
-                return None
+                    #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
+        if len(score) > 0:
+            input('최단경로 실행1/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
+            score.sort(key=operator.itemgetter(sort_standard))
+            # input('최단경로 실행1/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
+            return score[0]
+        else:
+            return None
 
 
-    def ShortestRoute(self, order, customers, input_route, now_t = 0, p2 = 0, speed = 1, M = 1000):
+    def ShortestRoute(self, order, customers, now_t = 0, p2 = 0, M = 1000):
+        """
+        order를 수행할 수 있는 가장 짧은 경로를 계산 후, 해당 경로의 feasible 여/부를 계산
+        반환 값 [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
+        *Note : 선택하는 주문에 추가적인 조건이 걸리는 경우 feasiblity에 추가적인 조건을 삽입할 수 있음.
+        @param order: 주문 -> class order
+        @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+        @param now_t: 현재 시간
+        @param p2: 허용 Food Lead Time의 최대 값
+        @param speed: 차량 속도
+        @param M: 가게와 고객을 구분하는 임의의 큰 수
+        @return: 최단 경로 정보 -> [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
+        """
         prior_route = []
         #input('주문 {} 고객정보 {} /이미 방문 경로 {}/ 남은 경로 {}'.format(order.index, order.customers, self.visited_route, self.route))
+        """
         for visitied_node in self.visited_route:
             for node in input_route:
-        #for node in input_route:
-        #    for visitied_node in self.visited_route:
                 if node[0] == visitied_node[0]:
                     prior_route.append(visitied_node[0] + M)
+                    break        
+        """
+        index_list = []
+        for visitied_node in self.visited_route:
+            for node in self.route:
+                if node[0] == visitied_node[0]:
+                    index_list.append(self.visited_route.index(visitied_node))
                     break
+        if len(index_list) > 0:
+            index_list.sort()
+            for visitied_node in self.visited_route[index_list[0]:]:
+                if visitied_node[1] == 0:
+                    prior_route.append(visitied_node[0] + M)
+                else:
+                    prior_route.append(visitied_node[0])
+            print('index_list {} 내용 {} 과거 경로 {}'.format(index_list, prior_route, self.visited_route))
         #input('기 방문 노드 {}'.format(prior_route))
         order_names = []  # 가게 이름?
         store_names = []
@@ -153,7 +176,7 @@ class Rider(object):
             order_names.append(customer_name)
             store_names.append(customer_name + M)
         #input('주문 목록1 {} /가게 목록1 {}'.format(order_names, store_names))
-        for node_info in input_route:
+        for node_info in self.route:
             if node_info[1] == 1:
                 order_names.append(node_info[0])
             else:
@@ -165,8 +188,8 @@ class Rider(object):
         feasible_subset = []
         for route_part in subset:
             route = prior_route + list(route_part)
-            #print('라우트:{}'.format(route))
-            sequence_feasiblity = True  # 모든 가게가 고객 보다 앞에 오는 경우.
+            #print('고려 되는 라우트:{}'.format(route))
+            sequence_feasiblity = True  # 모든 가게가 고객 보다 앞에 오는 경우. todo: 추가 조건이 걸리는 경우 feasible 의 True 에 걸리는 조건을 조정.
             feasible_routes = []
             for order_name in order_names:  # order_name + M : store name ;
                 if order_name + M in route:
@@ -177,42 +200,45 @@ class Rider(object):
                         break
             if sequence_feasiblity == True:
                 order_customers = []
-                order_customers_names = []
+                order_customers_names = [] #원래 order에 속한 주문 넣기
                 for customer_name in order.customers:
                     order_customers.append(customers[customer_name])
                     order_customers_names.append(customer_name)
                 if len(self.route) > 0:
-                    for info in self.route:
+                    for info in self.route: #현재 수행 중인 주문들 넣기
                         if info[0] not in order_customers_names:
-                            order_customers.append(customers[info[0]])
+                            order_customers.append(customers[info[0]]) #추가된  고객과 기존에 남아 있는 고객들의 customer class
                             order_customers_names.append(info[0])
-                # todo: 추가된 경로로 인한 FLT을 측정.
-                """
-                ftd_feasiblity, ftds = Basic.FLT_Calculate(order_customers, route, p2, M=M, speed=speed, add_time= add_time)
+                for past_name in prior_route:
+                    if past_name not in order_customers_names:
+                        if past_name < M:
+                            order_customers.append(customers[past_name])  # 사이에 있는 주문들 넣기
+                            order_customers_names.append(past_name)
+                        else:
+                            order_customers.append(customers[past_name - M])  # 사이에 있는 주문들 넣기
+                            order_customers_names.append(past_name - M)
+                # todo: FLT_Calculate 가 모든 형태의 경로에 대한 고려가 가능한기 볼 것.
+                ftd_feasiblity, ftds = FLT_Calculate(order_customers, customers, route, p2, M=M, speed=self.speed, now_t=now_t)
                 if ftd_feasiblity == True:
                     # print('ftds',ftds)
                     # input('멈춤5')
-                    route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M)
-                    feasible_routes.append(
-                        [route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])                
-                """
-                #print('주문 확인', order_customers)
-                #input('체크3')
-                #route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M)
-                route_time = Basic.RouteTime(order_customers, list(route_part), speed=speed, M=M)
-                rev_route = []
-                for node in route:
-                    if node not in prior_route:
-                        #print('node', node)
-                        if node < M:
-                            name = node
-                            info = [name, 1, customers[name].location,0]
-                        else:
-                            name = node - M
-                            info = [name, 0, customers[name].store_loc, 0]
-                        rev_route.append(info)
-                #input('기존 경로 중 {} 제외 경로 {} -> 추가될 경로 {}'.format(route,prior_route,rev_route))
-                feasible_routes.append([rev_route, None, None, None, order_names, route_time])
+                    #route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M)
+                    route_time = Basic.RouteTime(order_customers, list(route_part), speed=self.speed, M=M)
+                    #feasible_routes.append([route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])
+                    #route_time = Basic.RouteTime(order_customers, list(route_part), speed=speed, M=M)
+                    rev_route = []
+                    for node in route:
+                        if node not in prior_route:
+                            # print('node', node)
+                            if node < M:
+                                name = node
+                                info = [name, 1, customers[name].location, 0]
+                            else:
+                                name = node - M
+                                info = [name, 0, customers[name].store_loc, 0]
+                            rev_route.append(info)
+                    feasible_routes.append([rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])
+                    #input('기존 경로 중 {} 제외 경로 {} -> 추가될 경로 {}'.format(route,prior_route,rev_route))
             if len(feasible_routes) > 0:
                 feasible_routes.sort(key=operator.itemgetter(5)) #가장 짧은 거리의 경로 선택.
                 feasible_subset.append(feasible_routes[0])
@@ -224,18 +250,19 @@ class Rider(object):
         else:
             return []
 
-    def OrderPcik(self, order, route):
+    def OrderPick(self, order, route, customers, now_t):
+        """
+        수행한 order에 대한 경로를 차량 경로self.route에 반영하고, onhand에 해당 주문을 추가.
+        @param order: class order
+        @param route: 수정될 경로
+        @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+        @param now_t: 현재 시간
+        """
         order.picked = True
-        """
-        if order.type == 1:
-            customer = customers[order.customers[0]]
-            names = [customer.name]
-            route = [[customer.name, 0, customer.store_loc, 0], [customer.name, 1, customer.location, 0]]
-        else:
-            names = customers[order.customers]
-            route = order.route        
-        """
         names = order.customers
+        for name in names:
+            customers[name].time_info[1] = now_t
+            print('주문 {}의 고객 {} 가게 위치{} 고객 위치{}'.format(order.index, name, customers[name].store_loc, customers[name].location))
         print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
         self.route = route
         self.onhand += names
@@ -264,8 +291,8 @@ class Store(object):
         """
         Store order cooking process
         :param env: simpy Env
-        :param platform: Platform
-        :param capacity: store`s capacity
+        :param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+        :param capacity: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
         :param open_time: store open time
         :param close_time: store close time
         """
@@ -335,40 +362,72 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Orders, speed = 1, end_time = 120, interval = 1, runtime = 1000, gen_num = 10):
+def FLT_Calculate(customer_in_order, customers, route, p2, M = 1000, speed = 1, now_t = 0):
+    """
+    Calculate the customer`s Food Delivery Time in route(bundle)
+
+    :param orders: customer order in the route. type: customer class
+    :param route: customer route. [int,...,]
+    :param p2: allowable FLT increase
+    :param speed: rider speed
+    :return: Feasiblity : True/False, FLT list : [float,...,]
+    """
+    names = []
+    for order in customer_in_order:
+        names.append(order.name)
+    ftds = []
+    #input(''.format())
+    for order_name in names:
+        rev_p2 = p2
+        if customers[order_name].time_info[2] != None:
+            print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
+            last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
+            rev_p2 = p2 - last_time
+        s = route.index(order_name + M)
+        e = route.index(order_name)
+        ftd = Basic.RouteTime(customer_in_order, route[s: e + 1], speed = speed, M = M)
+        if ftd > rev_p2:
+            return False, []
+        else:
+            ftds.append(ftd)
+    return True, ftds
+
+
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
-    :param env:
-    :param Rider_dict:
-    :param rider_name:
-    :param Platform:
-    :param Store_dict:
-    :param end_time:
-    :param interval:
-    :param runtime:
-    :param gen_num:
+    :param env: simpy environment
+    :param Rider_dict: 플랫폼에 있는 라이더들 {[KY]rider name : [Value]class rider, ...}
+    :param rider_name: 라이더 이름 int+
+    :param Platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+    :param Store_dict: 플랫폼에 올라온 가게들 {[KY]store name : [Value]class store, ...}
+    :param Customer_dict:발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+    :param working_duration: 운행 시작 후 운행을 하는 시간
+    :param interval: 라이더 생성 간격
+    :param runtime: 시뮬레이션 동작 시간
+    :param gen_num: 생성 라이더 수
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Rider(env,rider_num,Platform, Orders,  Store_dict, speed = speed, end_t = end_time)
+        single_rider = Rider(env,rider_num,Platform, Customer_dict,  Store_dict, speed = speed, end_t = working_duration)
         Rider_dict[rider_num] = single_rider
         rider_num += 1
-        print('라이더 {} 생성'.format(rider_num))
+        print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
         yield env.timeout(interval)
 
 
-def ordergenerator(env, orders, stores, interval = 5, end_time = 100):
+def ordergenerator(env, orders, stores, interval = 5, runtime = 100):
     """
     Generate customer order
     :param env: Simpy Env
     :param orders: Order
-    :param platform: Platform
-    :param stores: Stores
-    :param interval: order gen interval
-    :param end_time: func end time
+    :param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+    :param stores: 플랫폼에 올라온 가게들 {[KY]store name : [Value]class store, ...}
+    :param interval: 주문 생성 간격
+    :param runtime: 시뮬레이션 동작 시간
     """
     name = 0
-    while env.now < end_time:
+    while env.now < runtime:
         #process_time = random.randrange(1,5)
         #input_location = [36,36]
         input_location = random.sample(list(range(50)),2)
@@ -391,7 +450,7 @@ env = simpy.Environment()
 #Platform = simpy.Store(env)
 Orders = {}
 Platform = []
-store_num = 2
+store_num = 10
 rider_num = 0
 Store_dict = {}
 Rider_dict = {}
