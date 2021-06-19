@@ -450,10 +450,7 @@ def RouteTime(orders, route, M = 1000, speed = 1):
             names += [order.name + M, order.name]
     else:
         input('Error')
-    #print('경로', route)
-    #print('정보',locs)
-    #print('이름들', names)
-    #input('체크4')
+    #print('고려 대상들{} 경로{}'.format(list(locs.keys()), route))
     for index in range(1,len(route)):
         bf = route[index-1]
         bf_loc = locs[bf][0]

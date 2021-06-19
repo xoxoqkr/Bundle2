@@ -156,11 +156,13 @@ class Rider(object):
                     break        
         """
         index_list = []
+        except_names = []
         for visitied_node in self.visited_route:
             for node in self.route:
                 if node[0] == visitied_node[0]:
                     index_list.append(self.visited_route.index(visitied_node))
                     break
+        already_served_customer_names = []
         if len(index_list) > 0:
             index_list.sort()
             for visitied_node in self.visited_route[index_list[0]:]:
@@ -168,7 +170,11 @@ class Rider(object):
                     prior_route.append(visitied_node[0] + M)
                 else:
                     prior_route.append(visitied_node[0])
-            print('index_list {} 내용 {} 과거 경로 {}'.format(index_list, prior_route, self.visited_route))
+            print('index_list {} 내용 {} 현재 경로 {} 과거 경로 {} 대상 경로 {}'.format(index_list, prior_route, self.route, self.visited_route, self.visited_route[index_list[0]:]))
+            for prior in prior_route:
+                if prior < M and customers[prior].time_info[3] != None:
+                    already_served_customer_names.append(prior)
+        #self.route에 있는 가장 이른 노드의 정보를 포함하는 prior route가 구성됨.
         #input('기 방문 노드 {}'.format(prior_route))
         order_names = []  # 가게 이름?
         store_names = []
@@ -210,15 +216,18 @@ class Rider(object):
                             order_customers.append(customers[info[0]]) #추가된  고객과 기존에 남아 있는 고객들의 customer class
                             order_customers_names.append(info[0])
                 for past_name in prior_route:
+                    #if past_name not in order_customers_names + already_served_customer_names:
                     if past_name not in order_customers_names:
                         if past_name < M:
-                            order_customers.append(customers[past_name])  # 사이에 있는 주문들 넣기
+                            order_customers.append(customers[past_name])  # 사이에 있는 주문 중 고객이 있다는 것은 이미 서비스 받은 고객을 의미.
                             order_customers_names.append(past_name)
                         else:
                             order_customers.append(customers[past_name - M])  # 사이에 있는 주문들 넣기
                             order_customers_names.append(past_name - M)
+                if len(already_served_customer_names) > 0:
+                    print('이미 서비스 받아서 고려 필요 X 고객 {}'.format(already_served_customer_names))
                 # todo: FLT_Calculate 가 모든 형태의 경로에 대한 고려가 가능한기 볼 것.
-                ftd_feasiblity, ftds = FLT_Calculate(order_customers, customers, route, p2, M=M, speed=self.speed, now_t=now_t)
+                ftd_feasiblity, ftds = FLT_Calculate(order_customers, customers, route,  p2, except_names = already_served_customer_names, M=M, speed=self.speed, now_t=now_t)
                 if ftd_feasiblity == True:
                     # print('ftds',ftds)
                     # input('멈춤5')
@@ -362,7 +371,7 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 
-def FLT_Calculate(customer_in_order, customers, route, p2, M = 1000, speed = 1, now_t = 0):
+def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 1000, speed = 1, now_t = 0):
     """
     Calculate the customer`s Food Delivery Time in route(bundle)
 
@@ -374,22 +383,38 @@ def FLT_Calculate(customer_in_order, customers, route, p2, M = 1000, speed = 1, 
     """
     names = []
     for order in customer_in_order:
-        names.append(order.name)
+        if order.name not in names:
+            names.append(order.name)
     ftds = []
     #input(''.format())
+    #print('경로 고객들 {} 경로 {}'.format(names, route))
     for order_name in names:
-        rev_p2 = p2
-        if customers[order_name].time_info[2] != None:
-            print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
-            last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
-            rev_p2 = p2 - last_time
-        s = route.index(order_name + M)
-        e = route.index(order_name)
-        ftd = Basic.RouteTime(customer_in_order, route[s: e + 1], speed = speed, M = M)
-        if ftd > rev_p2:
-            return False, []
-        else:
-            ftds.append(ftd)
+        if order_name not in except_names:
+            rev_p2 = p2
+            if customers[order_name].time_info[2] != None:
+                print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
+                last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
+                rev_p2 = p2 - last_time
+            try:
+                s = route.index(order_name + M)
+                e = route.index(order_name)
+                try:
+                    ftd = Basic.RouteTime(customer_in_order, route[s: e + 1], speed=speed, M=M)
+                except:
+                    print('경로 {}'.format(route))
+                    print('경로 시간 계산 에러/ 현재고객 {}/ 경로 고객들 {}'.format(order_name,names))
+                    input('중지')
+            except:
+                ftd = 0
+                print('경로 {}'.format(route))
+                print('인덱스 에러 발생 현재 고객 이름 {} 경로 고객들 {} 경로 {}'.format(order_name, names, route))
+                #input('인덱스 에러 발생')
+            #s = route.index(order_name + M)
+            #e = route.index(order_name)
+            if ftd > rev_p2:
+                return False, []
+            else:
+                ftds.append(ftd)
     return True, ftds
 
 
@@ -464,7 +489,7 @@ for store_name in range(store_num):
     #env.process(store.StoreRunner(env, Platform, capacity=store.capacity))
     Store_dict[store_name] = store
 
-env.process(RiderGenerator(env, Rider_dict, Platform, Store_dict, Orders, speed = rider_speed, end_time = 120, interval = rider_gen_interval, runtime = run_time, gen_num = rider_num))
+env.process(RiderGenerator(env, Rider_dict, Platform, Store_dict, Orders, speed = rider_speed,  interval = rider_gen_interval, runtime = run_time, gen_num = rider_num))
 env.process(ordergenerator(env, Orders, Store_dict, interval = order_interval))
 #env.process(Basic.Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000))
 env.run(run_time)
