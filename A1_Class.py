@@ -90,14 +90,14 @@ class Rider(object):
                         self.onhand.remove(node_info[0])
                         self.served.append(node_info[0])
                         #todo: order를 완료한 경우 order를 self.picked_orders에서 제거해야함.
-                        for index in self.picked_orders:
+                        for order_info in self.picked_orders:
                             done = True
-                            for customer_name in platform.platform[index].customers:
+                            for customer_name in order_info[1]:
                                 if customer_name not in self.served:
                                     done = False
                                     break
                             if done == True:
-                                self.picked_orders.remove(index)
+                                self.picked_orders.remove(order_info)
                     #print('T: {} 노드 {} 도착 '.format(int(env.now), node_info))
                     self.last_departure_loc = self.route[0][2]
                     self.visited_route.append(self.route[0])
@@ -138,15 +138,16 @@ class Rider(object):
             # 현재의 경로를 반영한 비용
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
-            #input('주문확인 {} / keys : {}'.format(order,platform.keys()))
+            #print('주문확인 {} / keys : {}'.format(order,platform.platform.keys()))
             if order.picked == False and (len(exp_onhand_order) <= self.capacity or len(self.picked_orders) <= self.max_order_num):
                 route_info = self.ShortestRoute(order, customers, p2=p2)
                 if len(route_info) > 0:
                     score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
                     if len(order.customers) > 1:
-                        input('점수 확인 {}'.format(score))
+                        #input('점수 확인 {}'.format(score))
                         score[-1][6] = 0
                     #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
+            #print('확인2')
         if len(score) > 0:
             #input('라이더 {} 최단경로 실행/ 대상 경로 수 {}, 내용{}'.format(self.name, len(score), score[0]))
             score.sort(key=operator.itemgetter(sort_standard))
@@ -214,6 +215,7 @@ class Rider(object):
         #input('주문 목록2 {} /가게 목록2 {}'.format(order_names, store_names))
         #input('이미 방문한 노드 {} /삽입 대상 {}'.format(prior_route, candi))
         subset = itertools.permutations(candi, len(candi))
+        #print('라이더 {} 탐색 대상 subset 수 : {}'.format(self.name, len(list(subset))))
         feasible_subset = []
         for route_part in subset:
             route = prior_route + list(route_part)
@@ -299,7 +301,7 @@ class Rider(object):
         #print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
         self.route = route
         self.onhand += names
-        self.picked_orders.append(order.index)
+        self.picked_orders.append([order.index, names])
         print('라이더 {} 수정후 경로 {}/ 보유 고객 {}'.format(self.name, self.route, self.onhand))
 
 class Store(object):

@@ -266,6 +266,7 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
             if order2 != order and dist <= dist_thres:
                 d.append(order2.name)
         M = itertools.combinations(d,s-1)
+        #print('번들 구성 고려 subset 수 {}'.format(len(list(M))))
         #M = list(M)
         b = []
         for m in M:
@@ -378,7 +379,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
         res[order_index] = o
         #res.append(o)
         order_index += 1
-        print('추가 정보 {}'.format(info))
+        #print('추가 정보 {}'.format(info))
     for index in platform_set.platform:
         order = platform_set.platform[index]
         if order.type == 'single':
@@ -466,7 +467,6 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed)
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B3 = b3_bundle
-
             print('B2:', B2)
             print('B3:', B3)
             B = B2 + B3
@@ -504,7 +504,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 if platform_set.platform[index].type == 'single':
                     count[0].append(platform_set.platform[index].customers)
                 else:
-                    print('종류??',platform_set.platform[index].type)
+                    #print('종류??',platform_set.platform[index].type)
                     count[1].append(platform_set.platform[index].customers)
             print('고객 이름들 4 :: 단건 주문 {} 번들 주문 {}'.format(count[0], count[1]))
             print('전체함수 플랫폼2 ID{}'.format(id(platform_set)))
@@ -514,6 +514,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]] #[B2 해체 수, B3 해체 수]
                 #번들의 해체가 필요
                 platform_set = BreakBundle(break_info, platform_set, orders)
-        input('T: {} B2,B3확인'.format(int(env.now)))
+        print('T: {} B2,B3확인'.format(int(env.now)))
+        #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
