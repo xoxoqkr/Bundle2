@@ -36,7 +36,7 @@ class Rider(object):
         self.container = []
         self.served = []
         self.p2 = p2
-        self.start_time = 0
+        self.start_time = start_time
         self.max_order_num = 3
         env.process(self.RunProcess(env, platform, customers, stores, self.p2))
 
@@ -92,7 +92,7 @@ class Rider(object):
                         #todo: order를 완료한 경우 order를 self.picked_orders에서 제거해야함.
                         for index in self.picked_orders:
                             done = True
-                            for customer_name in platform[index].customers:
+                            for customer_name in platform.platform[index].customers:
                                 if customer_name not in self.served:
                                     done = False
                                     break
@@ -106,13 +106,13 @@ class Rider(object):
             if len(self.onhand) < self.capacity:
                 print('T{} 라이더 {} 추가 탐색 시작'.format(env.now, self.name))
                 test = []
-                for index in platform:
-                    test += [platform[index].customers]
+                for index in platform.platform:
+                    test += [platform.platform[index].customers]
                 print('대상 주문들 {}'.format(test))
                 order_info = self.OrderSelect(platform, customers, p2 = p2)
                 if order_info != None:
                     #input('체크')
-                    added_order = platform[order_info[0]]
+                    added_order = platform.platform[order_info[0]]
                     print('T: {}/ 라이더 {}/ 주문 {} 선택 / 고객들 {}'.format(int(env.now), self.name, added_order.index, added_order.customers))
                     print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
                     self.OrderPick(added_order, order_info[1], customers, env.now)
@@ -134,9 +134,9 @@ class Rider(object):
         @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
         """
         score = []
-        for index in platform:
+        for index in platform.platform:
             # 현재의 경로를 반영한 비용
-            order = platform[index]
+            order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
             #input('주문확인 {} / keys : {}'.format(order,platform.keys()))
             if order.picked == False and (len(exp_onhand_order) <= self.capacity or len(self.picked_orders) <= self.max_order_num):
@@ -144,7 +144,8 @@ class Rider(object):
                 if len(route_info) > 0:
                     score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
                     if len(order.customers) > 1:
-                        score[7] = 0
+                        input('점수 확인 {}'.format(score))
+                        score[-1][6] = 0
                     #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
         if len(score) > 0:
             #input('라이더 {} 최단경로 실행/ 대상 경로 수 {}, 내용{}'.format(self.name, len(score), score[0]))
@@ -347,22 +348,24 @@ class Store(object):
                 #print('가게:',self.name,'/ 잔여 용량:', slack,'/대기 중 고객 수:',len(self.received_orders))
                 received_orders_num = len(self.received_orders)
                 platform_exist_order = []
-                for index in platform:
-                    platform_exist_order += platform[index].customers
+                for index in platform.platform:
+                    platform_exist_order += platform.platform[index].customers
                 #print('플랫폼에 있는 주문 {}'.format(platform_exist_order))
                 if received_orders_num > 0:
                     for count in range(min(slack,received_orders_num)):
                         order = self.received_orders[0] #앞에서 부터 플랫폼에 주문 올리기
                         route = [order.name, 0, order.store_loc, 0], [order.name, 1, order.location,0]
-                        if len(list(platform.keys())) > 0:
-                            order_index = max(list(platform.keys())) + 1
+                        if len(list(platform.platform.keys())) > 0:
+                            order_index = max(list(platform.platform.keys())) + 1
                         else:
                             order_index = 1
-                        o = Order(order_index, [order.name],route,1)
+                        o = Order(order_index, [order.name],route,'single')
                         #print('주문 정보',o.index, o.customers, o.route, o.type)
                         if o.customers[0] not in platform_exist_order:
-                            platform[order_index] = o
+                            #platform[order_index] = o
+                            platform.platform[order_index] = o
                             print('T : {} 가게 {} 고객 {} 주문 인덱스 {}에 추가'.format(env.now, self.name, o.customers, o.index))
+                            print('가게 플랫폼 ID{}'.format(id(platform)))
                         #platform.append(o)
                         #print('T : {} 가게 {} 고객 {} 주문 인덱스 {}에 추가'.format(env.now, self.name, o.customers, o.index))
                         if print_para == True:
@@ -418,6 +421,6 @@ class Customer(object):
         self.fee = fee
         self.ready_time = None #가게에서 음식이 조리 완료된 시점
 
-class Platform(object):
-    def __init__(self, platform):
-        self.platform = platform
+class Platform_pool(object):
+    def __init__(self):
+        self.platform = {}

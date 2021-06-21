@@ -370,14 +370,17 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
     res = {}
     for info in bundle_infos:
         bundle_names += info[4]
-        o = Order(order_index, info[4], info[0], 'bundle')
+        if len(bundle_names) == 1:
+            o = Order(order_index, info[4], info[0], 'single')
+        else:
+            o = Order(order_index, info[4], info[0], 'bundle')
         o.average_ftd = info[2]
         res[order_index] = o
         #res.append(o)
         order_index += 1
         print('추가 정보 {}'.format(info))
-    for index in platform_set:
-        order = platform_set[index]
+    for index in platform_set.platform:
+        order = platform_set.platform[index]
         if order.type == 'single':
             if order.customers[0] not in bundle_names and order.picked == False:
                 res[order.index] = order
@@ -390,8 +393,8 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
     already_ordered_customer_names = []
     for index in res:
         already_ordered_customer_names += res[index].customers
-    for index in platform_set:
-        already_ordered_customer_names += platform_set[index].customers
+    for index in platform_set.platform:
+        already_ordered_customer_names += platform_set.platform[index].customers
     for customer_name in unpicked_orders:
         if customer_name not in bundle_names + already_ordered_customer_names:
             names.append(customer_name)
@@ -415,8 +418,8 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
     """
     rev_order = {}  # 아직 서비스 되지 않은 고객 + 플렛폼에 있으나, 아직 번들로 구성되지 않은 주문 [KY] 고객 이름
     except_names = []
-    for index in platform_set:
-        order = platform_set[index]
+    for index in platform_set.platform:
+        order = platform_set.platform[index]
         if order.type == 'single':
             if order.picked == False:
                 rev_order[order.customers[0]] = orders[order.customers[0]]
@@ -467,19 +470,20 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             print('B2:', B2)
             print('B3:', B3)
             B = B2 + B3
-            for index in platform_set:
-                bundle_names += platform_set[index].customers
+            for index in platform_set.platform:
+                bundle_names += platform_set.platform[index].customers
                 #print('1 order index : {} added : {}'.format(order.index,order.customers))
             order_indexs = []
-            for index in platform_set:
+            for index in platform_set.platform:
                 order_indexs.append(index)
             if len(order_indexs) > 0:
                 order_index = max(order_indexs) + 1
             else:
                 order_index = 1
+            print('인덱스 수 확인', platform_set.platform.keys(), '키', order_index)
             bundle_names = []
-            for index in platform_set:
-                bundle_names += platform_set[index].customers
+            for index in platform_set.platform:
+                bundle_names += platform_set.platform[index].customers
                 #print('2 order index : {} added : {}'.format(order.index,order.customers))
             print('고객 이름들 2 :: {}'.format(list(bundle_names)))
             new_orders = PlatformOrderRevise(B, orders, order_index,platform_set) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
@@ -487,18 +491,23 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             for index in new_orders:
                 bundle_names += new_orders[index].customers
             still_names = []
-            for index in platform_set:
-                still_names += platform_set[index].customers
+            for index in platform_set.platform:
+                still_names += platform_set.platform[index].customers
             print('고객 이름들 3 :: 기존 {} 추가 {}'.format(list(sorted(still_names)),list(sorted(bundle_names))))
-            platform_set = new_orders
+            print('전체함수 플랫폼1 ID{}'.format(id(platform_set)))
+            #platform_set.platform = new_orders
+            print('원래 index {} :: 추가 index {}'.format(platform_set.platform.keys(),new_orders.keys()))
+            #platform_set.platform.update(new_orders)
+            platform_set.platform = new_orders
             count = [[],[]]
-            for index in platform_set:
-                if platform_set[index].type == 'single':
-                    count[0].append(platform_set[index].customers)
+            for index in platform_set.platform:
+                if platform_set.platform[index].type == 'single':
+                    count[0].append(platform_set.platform[index].customers)
                 else:
-                    count[1].append(platform_set[index].customers)
+                    print('종류??',platform_set.platform[index].type)
+                    count[1].append(platform_set.platform[index].customers)
             print('고객 이름들 4 :: 단건 주문 {} 번들 주문 {}'.format(count[0], count[1]))
-            print('전체함수 플랫폼 ID{}'.format(id(platform_set)))
+            print('전체함수 플랫폼2 ID{}'.format(id(platform_set)))
         else: #Break the offered bundle
             org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres=thres_p)
             if sum(rev_bundle_num) < sum(org_bundle_num):
