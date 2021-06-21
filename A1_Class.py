@@ -3,9 +3,8 @@
 import simpy
 import operator
 import itertools
-import Basic_Class2 as Basic
 import random
-import copy
+import A1_BasicFunc as Basic
 
 
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -96,7 +95,7 @@ class Rider(object):
                 if order_info != None:
                     #print('체크2_기 추가', order_info)
                     #input('체크')
-                    added_order = Platform[order_info[0]]
+                    added_order = platform[order_info[0]]
                     self.OrderPick(added_order, order_info[1], customers, env.now)
                 else:
                     yield env.timeout(wait_time)
@@ -228,7 +227,7 @@ class Rider(object):
                     #print('이미 서비스 받아서 고려 필요 X 고객 {}'.format(already_served_customer_names))
                     pass
                 # todo: FLT_Calculate 가 모든 형태의 경로에 대한 고려가 가능한기 볼 것.
-                ftd_feasiblity, ftds = FLT_Calculate(order_customers, customers, route,  p2, except_names = already_served_customer_names, M=M, speed=self.speed, now_t=now_t)
+                ftd_feasiblity, ftds = Basic.FLT_Calculate(order_customers, customers, route,  p2, except_names = already_served_customer_names, M=M, speed=self.speed, now_t=now_t)
                 if ftd_feasiblity == True:
                     # print('ftds',ftds)
                     # input('멈춤5')
@@ -370,126 +369,15 @@ class Store(object):
             self.ready_order.append(customer)
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
-
-def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 1000, speed = 1, now_t = 0):
-    """
-    Calculate the customer`s Food Delivery Time in route(bundle)
-
-    :param orders: customer order in the route. type: customer class
-    :param route: customer route. [int,...,]
-    :param p2: allowable FLT increase
-    :param speed: rider speed
-    :return: Feasiblity : True/False, FLT list : [float,...,]
-    """
-    names = []
-    for order in customer_in_order:
-        if order.name not in names:
-            names.append(order.name)
-    ftds = []
-    #input(''.format())
-    #print('경로 고객들 {} 경로 {}'.format(names, route))
-    for order_name in names:
-        if order_name not in except_names:
-            rev_p2 = p2
-            if customers[order_name].time_info[2] != None:
-                print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
-                last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
-                rev_p2 = p2 - last_time
-            try:
-                s = route.index(order_name + M)
-                e = route.index(order_name)
-                try:
-                    ftd = Basic.RouteTime(customer_in_order, route[s: e + 1], speed=speed, M=M)
-                except:
-                    print('경로 {}'.format(route))
-                    print('경로 시간 계산 에러/ 현재고객 {}/ 경로 고객들 {}'.format(order_name,names))
-                    input('중지')
-            except:
-                ftd = 0
-                print('경로 {}'.format(route))
-                print('인덱스 에러 발생 현재 고객 이름 {} 경로 고객들 {} 경로 {}'.format(order_name, names, route))
-                #input('인덱스 에러 발생')
-            #s = route.index(order_name + M)
-            #e = route.index(order_name)
-            if ftd > rev_p2:
-                return False, []
-            else:
-                ftds.append(ftd)
-    return True, ftds
-
-
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10):
-    """
-    Generate the rider until t <= runtime and rider_num<= gen_num
-    :param env: simpy environment
-    :param Rider_dict: 플랫폼에 있는 라이더들 {[KY]rider name : [Value]class rider, ...}
-    :param rider_name: 라이더 이름 int+
-    :param Platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
-    :param Store_dict: 플랫폼에 올라온 가게들 {[KY]store name : [Value]class store, ...}
-    :param Customer_dict:발생한 고객들 {[KY]customer name : [Value]class customer, ...}
-    :param working_duration: 운행 시작 후 운행을 하는 시간
-    :param interval: 라이더 생성 간격
-    :param runtime: 시뮬레이션 동작 시간
-    :param gen_num: 생성 라이더 수
-    """
-    rider_num = 0
-    while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Rider(env,rider_num,Platform, Customer_dict,  Store_dict, speed = speed, end_t = working_duration)
-        Rider_dict[rider_num] = single_rider
-        rider_num += 1
-        print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
-        yield env.timeout(interval)
-
-
-def ordergenerator(env, orders, stores, interval = 5, runtime = 100):
-    """
-    Generate customer order
-    :param env: Simpy Env
-    :param orders: Order
-    :param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
-    :param stores: 플랫폼에 올라온 가게들 {[KY]store name : [Value]class store, ...}
-    :param interval: 주문 생성 간격
-    :param runtime: 시뮬레이션 동작 시간
-    """
-    name = 0
-    while env.now < runtime:
-        #process_time = random.randrange(1,5)
-        #input_location = [36,36]
-        input_location = random.sample(list(range(50)),2)
-        store_num = random.randrange(0, len(stores))
-        order = Basic.Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location)
-        orders[name] = order
-        stores[store_num].received_orders.append(orders[name])
-        yield env.timeout(interval)
-        #print('현재 {} 플랫폼 주문 수 {}'.format(int(env.now), len(platform)))
-        name += 1
-
-order_interval = 1
-rider_working_time = 120
-interval = 5
-p2 = 20
-thres_p = 1
-run_time = 120
-#실행부
-env = simpy.Environment()
-#Platform = simpy.Store(env)
-Orders = {}
-Platform = []
-store_num = 10
-rider_num = 3
-Store_dict = {}
-Rider_dict = {}
-rider_gen_interval = 10
-rider_speed = 2.5
-
-#Before simulation, generate the stores.
-for store_name in range(store_num):
-    loc = list(random.sample(range(0,50),2))
-    store = Store(env, Platform, store_name, loc = loc, capacity = 10, print_para= False)
-    #env.process(store.StoreRunner(env, Platform, capacity=store.capacity))
-    Store_dict[store_name] = store
-
-env.process(RiderGenerator(env, Rider_dict, Platform, Store_dict, Orders, speed = rider_speed,  interval = rider_gen_interval, runtime = run_time, gen_num = rider_num))
-env.process(ordergenerator(env, Orders, Store_dict, interval = order_interval))
-#env.process(Basic.Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000))
-env.run(run_time)
+class Customer(object):
+    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 1000):
+        self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
+        self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
+        # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
+        # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
+        self.location = input_location
+        self.store_loc = store_loc
+        self.store = store
+        self.type = 'single_order'
+        self.fee = fee
+        self.ready_time = None #가게에서 음식이 조리 완료된 시점
