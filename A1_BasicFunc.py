@@ -77,11 +77,12 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     ftds = []
     #input(''.format())
     #print('경로 고객들 {} 경로 {}'.format(names, route))
+    #input('체크1 {} 체크2 {}'.format(customer_in_order,customers))
     for order_name in names:
         if order_name not in except_names:
             rev_p2 = p2
             if customers[order_name].time_info[2] != None:
-                print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
+                #print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
                 last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
                 rev_p2 = p2 - last_time
             try:
@@ -107,7 +108,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     return True, ftds
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10):
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -123,14 +124,14 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, speed =
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, speed = speed, end_t = working_duration)
+        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity)
         Rider_dict[rider_num] = single_rider
         rider_num += 1
         print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
         yield env.timeout(interval)
 
 
-def ordergenerator(env, orders, stores, interval = 5, runtime = 100):
+def Ordergenerator(env, orders, stores, interval = 5, runtime = 100):
     """
     Generate customer order
     :param env: Simpy Env

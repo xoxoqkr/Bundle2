@@ -2,8 +2,9 @@
 
 import simpy
 import random
-import A1_BasicFunc as Basic
-import A1_Class as Class
+from A1_BasicFunc import Ordergenerator, RiderGenerator
+from A1_Class import Store
+from A2_Func import Platform_process
 
 #Parameter define
 order_interval = 1
@@ -15,22 +16,24 @@ run_time = 120
 #Run part
 env = simpy.Environment()
 Orders = {}
-Platform = []
+Platform = {}
 store_num = 10
 rider_num = 3
 Store_dict = {}
 Rider_dict = {}
 rider_gen_interval = 10
 rider_speed = 2.5
+unserved_order_break = False
+rider_capacity = 5
 
 #Before simulation, generate the stores.
 for store_name in range(store_num):
     loc = list(random.sample(range(0,50),2))
-    store = Class.Store(env, Platform, store_name, loc = loc, capacity = 10, print_para= False)
+    store = Store(env, Platform, store_name, loc = loc, capacity = 10, print_para= False)
     #env.process(store.StoreRunner(env, Platform, capacity=store.capacity))
     Store_dict[store_name] = store
 
-env.process(Basic.RiderGenerator(env, Rider_dict, Platform, Store_dict, Orders, speed = rider_speed,  interval = rider_gen_interval, runtime = run_time, gen_num = rider_num))
-env.process(Basic.ordergenerator(env, Orders, Store_dict, interval = order_interval))
-#env.process(Basic.Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000))
+env.process(RiderGenerator(env, Rider_dict, Platform, Store_dict, Orders, speed = rider_speed,  interval = rider_gen_interval, runtime = run_time, gen_num = rider_num, capacity = rider_capacity))
+env.process(Ordergenerator(env, Orders, Store_dict, interval = order_interval))
+env.process(Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000, unserved_order_break= unserved_order_break))
 env.run(run_time)

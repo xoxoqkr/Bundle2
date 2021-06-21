@@ -3,103 +3,10 @@ import operator
 import random
 import math
 import simpy
-import copy
 import itertools
+from A1_BasicFunc import RouteTime, distance, FLT_Calculate
+from A1_Class import Order
 
-
-class Order(object):
-    def __init__(self, order_name, customer_names, route, type = '1'):
-        self.name = order_name
-        self.customers = customer_names
-        self.route = route
-        self.type = type #1:단주문, 2:B2, 3:B3
-
-class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 1000):
-        self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
-        self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
-        # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
-        # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
-        self.location = input_location
-        self.store_loc = store_loc
-        self.store = store
-        self.type = 'single_order'
-        self.fee = fee
-        self.ready_time = None #가게에서 음식이 조리 완료된 시점
-
-
-
-class rider(object):
-    def __init__(self, env, name, platform, stores, speed = 1, capacity = 3, end_time = 1000):
-        self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
-        self.start_time = int(env.now)
-        self.resource = simpy.Resource(env, capacity = capacity)
-        self.done_orders = []
-        self.capacity = capacity
-        self.end = False
-        self.end_time = env.now + end_time
-        self.speed = speed
-        self.last_loc = [25,25]
-        env.process(self.Runner(env, platform,stores))
-
-
-    def RiderMoving(self, env, time, loc):
-        """
-        라이더가 움직이는 시간의 env.time의 generator를 반환
-        :param env: simpy.env
-        :param time: 라이더가 움직이는 시간
-        """
-        yield env.timeout(time)
-        self.last_loc = loc
-        print('현재T:',int(env.now),"/라이더 ",self.name,"가게 도착")
-
-    def Runner(self, env, platform, stores, ready_time = 2):
-        """
-        Rider`s behavior during working time.
-        :param env: simpy Env
-        :param platform: Platform
-        :param stores: Store. resource. limited capacity for cooking
-        :param ready_time: ready time for pick-up
-        :param end_time: rider exit time. rider will be accept the order until end time.
-        """
-        while env.now < self.end_time:
-            order = RiderChoiceCustomer(self, platform)
-            if len(platform) > 0 and len(self.resource.put_queue) < self.capacity and order != None:
-                #order = RiderChoiceCustomer(self, platform)  #todo: 라이더가 platform의 주문 중 가장 이윤이 높은 것을 선택.
-                #order = platform[0] #큐의 가장 앞에 주문을 잡음.
-                order.time_info[1] = env.now
-                print('현재T:',int(env.now),'/라이더',self.name,"/주문",order.name,'선택')
-                #input('정지')
-                store_name = order.store
-                #print('가게정보',stores[store_name].wait_orders)
-                platform.remove(order)
-                #stores[store_name].wait_orders.remove(order)
-                #move_time = random.randrange(5,12)
-                move_time = distance(self.last_loc, order.store_loc) / self.speed
-                exp_arrival_time = env.now + move_time
-                print('현재T:', int(env.now), '/라이더', self.name, "/주문", order.name,'/가게까지 이동시간', move_time, '조리시간', stores[store_name].order_ready_time)
-                #if len(stores[store_name].resource.users) + len(stores[store_name].wait_orders) > stores[store_name].capacity:
-                #    print('음식점이 조리 불가','라이더',self.name,"주문 ", order.name,'/현재시간',int(env.now))
-                yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_time, order.store_loc)) #둘 중 더 오래 걸리는 process가 완료 될 때까지 기다림
-                rider_wait_time = max(0, env.now - exp_arrival_time)
-                food_wait_time = max(0, env.now - order.ready_time)
-                #print(env.now - exp_arrival_time, env.now - order.ready_time)
-                print('현재T:', int(env.now), '/라이더', self.name, "/주문", order.name, '픽업 완료/라이더 대기시간:',round(rider_wait_time,2),'/음식대기시간',round(food_wait_time,2))
-                with self.resource.request() as req:
-                    stores[store_name].ready_order.remove(order)
-                    req.info = [order.name, round(env.now, 2)]
-                    order.time_info[3] = env.now
-                    yield req  # users에 들어간 이후에 작동
-                    #move_time = random.randrange(1,5)
-                    move_time = distance(order.store_loc, order.location)/self.speed
-                    yield env.timeout(move_time)
-                    order.time_info[4] = env.now
-                    self.last_loc = order.location
-                    #stores[store_name].ready_order.remove(order)
-                    print('현재T:', int(env.now),'/라이더',self.name,"/배달 완료/ 고객:", order.name,'/이동시간',move_time)
-            else: #현재 플랫폼에 주문이 없다면, 아래 시간 만큼 대기 후 다시 탐색 수행
-                #print('현재T:', int(env.now),'/라이더',self.name,"/주문X")
-                yield env.timeout(1)
 
 class Bundle(object):
     """
@@ -118,118 +25,6 @@ class Bundle(object):
         self.visit_t = []
         self.fee = 0
         self.type = 'bundle'
-
-
-class Store(object):
-    """
-    Store can received the order.
-    Store has capacity. The order exceed the capacity must be wait.
-    """
-    def __init__(self, env, platform, name, loc = [25,25], order_ready_time = 7, capacity = 6, slack = 2, print_para = True):
-        self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
-        self.location = loc
-        self.order_ready_time = order_ready_time
-        self.resource = simpy.Resource(env, capacity = capacity)
-        self.slack = slack #자신의 조리 중이 queue가 꽉 차더라도, 추가로 주문을 넣을 수 있는 주문의 수
-        self.received_orders = []
-        self.wait_orders = []
-        self.ready_order = []
-        self.loaded_order = []
-        self.capacity = capacity
-        env.process(self.StoreRunner(env, platform, capacity = capacity, print_para= print_para))
-
-
-    def StoreRunner(self, env, platform, capacity, open_time = 1, close_time = 900, print_para = True):
-        """
-        Store order cooking process
-        :param env: simpy Env
-        :param platform: Platform
-        :param capacity: store`s capacity
-        :param open_time: store open time
-        :param close_time: store close time
-        """
-        #input('가게 주문 채택')
-        #yield env.timeout(open_time)
-        now_time = round(env.now, 1)
-        #input('가게 주문 채택0')
-        while now_time < close_time:
-            now_time = round(env.now,1)
-            #받은 주문을 플랫폼에 올리기
-            #print('값 확인',len(self.resource.users) , len(self.wait_orders), capacity , self.slack,len(self.received_orders))
-            if len(self.resource.users) + len(self.resource.put_queue) < capacity + self.slack:  # 플랫폼에 자신이 생각하는 여유 만큼을 게시
-            #if len(self.resource.users) + len(self.wait_orders) < capacity + self.slack: #플랫폼에 자신이 생각하는 여유 만큼을 게시
-                #self.received_orders.append()
-                #print('접수된 고객 수', len(self.received_orders))
-                #input('가게 주문 채택1')
-                #slack = min(capacity + self.slack - len(self.resource.users), len(self.received_orders))
-                slack = capacity + self.slack - len(self.resource.users)
-                #print('가게:',self.name,'/ 잔여 용량:', slack,'/대기 중 고객 수:',len(self.received_orders))
-                received_orders_num = len(self.received_orders)
-                if received_orders_num > 0:
-                    for count in range(min(slack,received_orders_num)):
-                        order = self.received_orders[0] #앞에서 부터 플랫폼에 주문 올리기
-                        platform.append(order)
-                        if print_para == True:
-                            print('현재T:', int(env.now), '/가게', self.name, '/주문', order.name, '플랫폼에 접수/조리대 여유:',capacity - len(self.resource.users),'/조리 중',len(self.resource.users))
-                        self.wait_orders.append(order)
-                        self.received_orders.remove(order)
-                        #input('가게 주문 채택2')
-            else: #이미 가게의 능력 최대로 조리 중. 잠시 주문을 막는다(block)
-                #print("가게", self.name, '/',"여유 X", len(self.resource.users),'/주문대기중',len(self.received_orders))
-                pass
-            #만약 현재 조리 큐가 꽉차는 경우에는 주문을 더이상 처리하지 X
-            yield env.timeout(0.1)
-        #print("T",int(env.now),"접수 된 주문", self.received_orders)
-
-
-    def Cook(self, env, customer, cooking_time_type = 'fixed'):
-        """
-        Occupy the store capacity and cook the order
-        :param env: simpy Env
-        :param customer: class customer
-        :param cooking_time_type: option
-        """
-        #print('현재 사용중', len(self.resource.users))
-        with self.resource.request() as req:
-            yield req #resource를 점유 해야 함.
-            print('현재T:',int(env.now),'/가게',self.name,'/주문:',customer.name,"조리시작")
-            now_time = round(env.now , 1)
-            req.info = [customer.name, now_time]
-            if cooking_time_type == 'fixed':
-                cooking_time = self.order_ready_time
-            elif cooking_time_type == 'random':
-                cooking_time = random.randrange(1,self.order_ready_time)
-            else:
-                cooking_time = 1
-            #print(cooking_time, '분 후 ', customer.name, "음식준비완료")
-            yield env.timeout(cooking_time)
-            #print(self.resource.users)
-            print('현재T:',int(env.now),'/가게',self.name,'/주문:',customer.name,"음식준비완료")
-            customer.food_ready = True
-            customer.ready_time = env.now
-            self.ready_order.append(customer)
-            #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
-
-
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, speed = 1, end_time = 120, interval = 1, runtime = 1000, gen_num = 10):
-    """
-    Generate the rider until t <= runtime and rider_num<= gen_num
-    :param env:
-    :param Rider_dict:
-    :param rider_name:
-    :param Platform:
-    :param Store_dict:
-    :param end_time:
-    :param interval:
-    :param runtime:
-    :param gen_num:
-    """
-    rider_num = 0
-    while env.now <= runtime or rider_num <= gen_num:
-        single_rider = rider(env,rider_num,Platform, Store_dict, speed = speed, end_time = end_time)
-        Rider_dict[rider_num] = single_rider
-        rider_num += 1
-        yield env.timeout(interval)
 
 def CustomerValueForRiderCalculator(rider, customer):
     """
@@ -258,33 +53,6 @@ def RiderChoiceCustomer(rider, customers):
         return customer_values[0][1]
     else:
         return None
-
-
-def ordergenerator(env, orders, platform, stores, interval = 5, end_time = 100):
-    """
-    Generate customer order
-    :param env: Simpy Env
-    :param orders: Order
-    :param platform: Platform
-    :param stores: Stores
-    :param interval: order gen interval
-    :param end_time: func end time
-    """
-    name = 0
-    while env.now < end_time:
-        #process_time = random.randrange(1,5)
-        #input_location = [36,36]
-        input_location = random.sample(list(range(50)),2)
-        store_num = random.randrange(0, len(stores))
-        order = Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location)
-        orders[name] = order
-        stores[store_num].received_orders.append(orders[name])
-        print('T:', int(env.now),'/주문:', orders[name].name,'접수')
-        #print('가게 큐', stores[store_num].received_orders)
-        platform.append(order)
-        yield env.timeout(interval)
-        print('현재 {} 플랫폼 주문 수 {}'.format(int(env.now), len(platform)))
-        name += 1
 
 
 def CalculateRho(lamda1, lamda2, mu1, mu2, add_lamda = 0, add_mu = 0):
@@ -348,7 +116,7 @@ def RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres = 1):
     customer_num = 0
     for order in platform_set:
         if order.type == 'bundle':
-            if order.size == 2:
+            if len(order.customers) == 2:
                 b2_num += 1
                 org_b2_num += 1
             else:
@@ -395,7 +163,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     breaked_customer_names = []
     for order in platform_set:
         if order.type == 'bundle':
-            if order.size == 2:
+            if len(order.customers) == 2:
                 b2.append(order)
             else:
                 b3.append(order)
@@ -404,105 +172,29 @@ def BreakBundle(break_info, platform_set, customer_set):
     b2.sort(key=operator.attrgetter('average_ftd'), reverse=True)
     b3.sort(key=operator.attrgetter('average_ftd'), reverse=True)
     for break_b2 in range(min(break_info[0],len(b2))):
-        breaked_customer_names.append(b2[0].customer_names)
+        breaked_customer_names.append(b2[0].customers)
         del b2[0]
     for break_b3 in range(min(break_info[1],len(b3))):
-        breaked_customer_names.append(b3[0].customer_names)
+        breaked_customer_names.append(b3[0].customers)
         del b3[0]
     breaked_customers = []
+    order_nums = []
+    for order in platform_set:
+        order_nums += order.customers
+    order_num = max(order_nums) + 1
     for customer_name in breaked_customer_names:
-        breaked_customers.append(customer_set[customer_name])
+        route = [[customer_name, 0, customer_set[customer_name].store_loc, 0],[customer_name, 1, customer_set[customer_name].location, 0 ]]
+        order = Order(order_num,customer_name, route, 'single')
+        breaked_customers.append(order)
     res = single_orders + b2 + b3 + breaked_customers
     return res
 
 
-def distance(p1, p2):
-    """
-    Calculate 4 digit rounded euclidean distance between p1 and p2
-    :param p1:
-    :param p2:
-    :return: 4 digit rounded euclidean distance between p1 and p2
-    """
-    euc_dist = math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
-    return round(euc_dist,4)
-
-
-def RouteTime(orders, route, M = 1000, speed = 1):
-    """
-    Time to move the route with speed
-    :param orders: order in route
-    :param route: seq
-    :param speed: rider speed
-    :return: time : float
-    """
-    time = 0
-    locs = {}
-    names = []
-    if type(orders) == dict:
-        for order_name in orders:
-            locs[order_name + M] = [orders[order_name].store_loc, 'store', orders[order_name].time_info[6]]
-            locs[order_name] = [orders[order_name].location, 'customer', orders[order_name].time_info[7]]
-            names += [order_name + M, order_name]
-    elif type(orders) == list:
-        for order in orders:
-            locs[order.name + M] = [order.store_loc, 'store', order.time_info[6]]
-            locs[order.name] = [order.location, 'customer', order.time_info[7]]
-            names += [order.name + M, order.name]
-    else:
-        input('Error')
-    #print('고려 대상들{} 경로{}'.format(list(locs.keys()), route))
-    for index in range(1,len(route)):
-        bf = route[index-1]
-        bf_loc = locs[bf][0]
-        af = route[index]
-        #print(bf,af)
-        af_loc = locs[af][0]
-        time += distance(bf_loc,af_loc)/speed + locs[af][2]
-        """
-        print('정보', bf, af, af - M)
-        print('고려 고객들', orders)
-        input('멈춤4')
-        if af < M : #customer process time #도착지가 고객인 경우
-            time += orders[af].time_info[7]
-        else: # store process time #도착지가 가게인 경우
-            input('멈춤5')
-            time += orders[af - M].time_info[6]        
-        """
-    return round(time,4)
-
-
-def FLT_Calculate(orders, route, p2, M = 1000, speed = 1, add_time = None):
-    """
-    Calculate the customer`s Food Delivery Time in route(bundle)
-
-    :param orders: customer order in the route. type: customer class
-    :param route: customer route. [int,...,]
-    :param p2: allowable FLT increase
-    :param speed: rider speed
-    :return: Feasiblity : True/False, FLT list : [float,...,]
-    """
-    names = []
-    for order in orders:
-        names.append(order.name)
-    ftds = []
-    for order_name in names:
-        rev_p2 = p2
-        if add_time != None:
-            rev_p2 = p2 - add_time[order_name]
-        s = route.index(order_name + M)
-        e = route.index(order_name)
-        ftd = RouteTime(orders, route[s: e + 1], speed = speed, M = M)
-        if ftd > rev_p2:
-            return False, []
-        else:
-            ftds.append(ftd)
-    return True, ftds
-
-
-def BundleConsist(orders, p2, speed = 1,M = 1000):
+def BundleConsist(orders, customers, p2, speed = 1,M = 1000):
     """
     Construct bundle consists of orders
     :param orders: customer order in the route. type: customer class
+    :param customers: customer dict  {[KY]customer name: [Value]class customer,...}
     :param p2: allowable FLT increase
     :param M: big number for distinguish order name and store name
     :param speed: rider speed
@@ -530,12 +222,13 @@ def BundleConsist(orders, p2, speed = 1,M = 1000):
         if sequence_feasiblity == True:
             #print('순서는 만족', route)
             #input('멈춤3')
-            ftd_feasiblity, ftds = FLT_Calculate(orders, route, p2, M = M ,speed = speed)
+            ftd_feasiblity, ftds = FLT_Calculate(orders, customers, route, p2, [],M = M ,speed = speed)
+            #customer_in_order, customers, route, p2, except_names, M = 1000, speed = 1, now_t = 0
             if ftd_feasiblity == True:
                 #print('ftds',ftds)
                 #input('멈춤5')
                 route_time = RouteTime(orders, route, speed=speed, M=M)
-                feasible_routes.append([route, max(ftds), sum(ftds)/len(ftds), min(ftds), order_names,route_time])
+                feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names,round(route_time,2)])
                 #[경로, 최대FTD, 평균FTD, 최소FTD]
         if len(feasible_routes) > 0:
             feasible_routes.sort(key = operator.itemgetter(2))
@@ -580,15 +273,17 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
             subset_orders = []
             for name in q:
                 subset_orders.append(orders[name])
-            tem_route_info = BundleConsist(subset_orders, p2, speed = speed)
+            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed)
             if len(tem_route_info) > 0:
                 b.append(tem_route_info)
         if len(b) > 0:
             b.sort(key = operator.itemgetter(2))
             B.append(b[0])
     #n개의 번들 선택
+    B.sort(key = operator.itemgetter(5))
     selected_bundles = []
     selected_orders = []
+    print('번들들 {}'.format(B))
     for bundle_info in B:
         # bundle_info = [[route,max(ftds),average(ftds), min(ftds), names],...,]
         unique = True
@@ -597,13 +292,13 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
                 unique = False
                 break
         if unique == True:
-            selected_orders.append(bundle_info[4])
+            selected_orders += bundle_info[4]
             selected_bundles.append(bundle_info)
             if len(selected_bundles) >= n:
                 break
     if len(selected_bundles) > 0:
         #print("selected bundle#", len(selected_bundles))
-        #print("selected bundle#", selected_bundles)
+        print("selected bundle#", selected_bundles)
         #input('멈춤7')
         pass
     #todo: 1)겹치는 고객을 가지는 번들 중 1개를 선택해야함. 2)어떤 번들이 더 좋은 번들인가?
@@ -662,7 +357,7 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     return idle_riders, len(interval_riders)
 
 
-def PlatformOrderRevise(bundles, customer_set):
+def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
     """
     Construct unpicked_orders with bundled customer
     :param bundles: constructed bundles
@@ -672,21 +367,76 @@ def PlatformOrderRevise(bundles, customer_set):
     unpicked_orders, num = CountUnpickedOrders(customer_set, 0 , interval = 0, return_type = 'name')
     bundle_names = []
     names = []
-    for bundle in bundles:
-        bundle_names.append(bundle.customer_names)
+    res = {}
+    for info in bundle_infos:
+        bundle_names += info[4]
+        o = Order(order_index, info[4], info[0], 'bundle')
+        o.average_ftd = info[2]
+        res[order_index] = o
+        #res.append(o)
+        order_index += 1
+        print('추가 정보 {}'.format(info))
+    for index in platform_set:
+        order = platform_set[index]
+        if order.type == 'single':
+            if order.customers[0] not in bundle_names and order.picked == False:
+                res[order.index] = order
+            else:
+                pass
+        else:
+            if order.picked == False:
+                #res.append(order)
+                pass
+    already_ordered_customer_names = []
+    for index in res:
+        already_ordered_customer_names += res[index].customers
+    for index in platform_set:
+        already_ordered_customer_names += platform_set[index].customers
     for customer_name in unpicked_orders:
-        if customer_name not in bundle_names:
+        if customer_name not in bundle_names + already_ordered_customer_names:
             names.append(customer_name)
-    res = []
-    for customer_name in names:
-        res.append(customer_set[customer_name])
-    res += bundles
+            customer = customer_set[customer_name]
+            singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
+            o = Order(order_index, [customer_name], singleroute, 'single')
+            #res.append(o)
+            res[order_index] = o
+            order_index += 1
+            print('추가 정보22 {}'.format(customer_name))
     return res
 
 
+def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
+    """
+    번들 구성에 고려될 수 있는 고객들을 선별함.
+    @param platform_set: platform set list [class order, ...,]
+    @param orders: customer set {[KY] customer name : [Value] class customer}
+    @param unserved_order_break: T: 서비스 되지 않은 번들도 번들 구성에 고려/ F : 이미 구성된 번들은 고려하지 않음.
+    @return: 번들 구성에 사용될 수 있는 고객 {[KY] customer name : [Value] class customer}
+    """
+    rev_order = {}  # 아직 서비스 되지 않은 고객 + 플렛폼에 있으나, 아직 번들로 구성되지 않은 주문 [KY] 고객 이름
+    except_names = []
+    for index in platform_set:
+        order = platform_set[index]
+        if order.type == 'single':
+            if order.picked == False:
+                rev_order[order.customers[0]] = orders[order.customers[0]]
+            else: #already picked customer
+                pass
+        else: #번들인 경우
+            if order.picked == False:
+                if unserved_order_break == False:
+                    except_names += order.customers  # todo: 기존에 구성된 번들은 해체되지 않음.
+                else:
+                    pass
+            else: #이미 선택된 주문의 경우
+                pass
+    for customer_name in orders:
+        customer = orders[customer_name]
+        if customer.time_info[1] == None and customer_name not in list(rev_order.keys()) + except_names:
+            rev_order[customer_name] = customer
+    return rev_order
 
-
-def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000):
+def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True):
     B2 = []
     B3 = []
     while env.now <= end_t:
@@ -695,39 +445,66 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
         lamda1 = len(unpicked_orders)
         idle_riders, mu2 = CountIdleRiders(riders, now_t, interval = interval, return_type = 'class')
         mu1 = len(idle_riders)
-        #print(lamda1, lamda2, mu1, mu2)
-        #input('확인2')
-        p = CalculateRho(lamda1, lamda2, mu1, mu2)
+        #p = CalculateRho(lamda1, lamda2, mu1, mu2)
+        p = 2
+        rev_order = ConsideredCustomer(platform_set, orders, unserved_order_break = unserved_order_break)
+        print('번들 생성에 고려되는 고객들 {}'.format(sorted(list(rev_order.keys()))))
         if p >= thres_p:
             if lamda1/3 < mu1 + mu2:
                 b2,b3 = RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres=thres_p)
             else:
                 b2 = 0
                 b3 = int(lamda1/3)
-            B = []
             if b2 > 0:
-                b2_bundle = ConstructBundle(orders, 2, b2, p2, speed = speed)
+                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed)
                 #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B2 = b2_bundle
             if b3 > 0:
-                b3_bundle = ConstructBundle(orders, 3, b3, p2, speed = speed)
+                b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed)
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B3 = b3_bundle
-            count = 1
+
             print('B2:', B2)
             print('B3:', B3)
-            input('B2,B3확인')
-            for info in B2+B3:
-                B.append(Bundle(count,info[4], info[0],info[1:4]))
-                count += 1
-            #offer bundle to the rider:
-            offered_order = PlatformOrderRevise(B, orders)
-            platform_set = offered_order
+            B = B2 + B3
+            for index in platform_set:
+                bundle_names += platform_set[index].customers
+                #print('1 order index : {} added : {}'.format(order.index,order.customers))
+            order_indexs = []
+            for index in platform_set:
+                order_indexs.append(index)
+            if len(order_indexs) > 0:
+                order_index = max(order_indexs) + 1
+            else:
+                order_index = 1
+            bundle_names = []
+            for index in platform_set:
+                bundle_names += platform_set[index].customers
+                #print('2 order index : {} added : {}'.format(order.index,order.customers))
+            print('고객 이름들 2 :: {}'.format(list(bundle_names)))
+            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
+            bundle_names = []
+            for index in new_orders:
+                bundle_names += new_orders[index].customers
+            still_names = []
+            for index in platform_set:
+                still_names += platform_set[index].customers
+            print('고객 이름들 3 :: 기존 {} 추가 {}'.format(list(sorted(still_names)),list(sorted(bundle_names))))
+            platform_set = new_orders
+            count = [[],[]]
+            for index in platform_set:
+                if platform_set[index].type == 'single':
+                    count[0].append(platform_set[index].customers)
+                else:
+                    count[1].append(platform_set[index].customers)
+            print('고객 이름들 4 :: 단건 주문 {} 번들 주문 {}'.format(count[0], count[1]))
+            print('전체함수 플랫폼 ID{}'.format(id(platform_set)))
         else: #Break the offered bundle
             org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres=thres_p)
             if sum(rev_bundle_num) < sum(org_bundle_num):
-                break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]]
+                break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]] #[B2 해체 수, B3 해체 수]
                 #번들의 해체가 필요
                 platform_set = BreakBundle(break_info, platform_set, orders)
+        input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
