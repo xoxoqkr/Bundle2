@@ -1,30 +1,10 @@
 # -*- coding: utf-8 -*-
 import operator
-import random
-import math
-import simpy
 import itertools
 from A1_BasicFunc import RouteTime, distance, FLT_Calculate
 from A1_Class import Order
+import time
 
-
-class Bundle(object):
-    """
-    Bundle consists of multiple orders
-    """
-    def __init__(self, bundle_name, names, route, ftd_info):
-        self.name = bundle_name
-        self.size = len(names)
-        self.customer_names = names
-        self.routebyname = route
-        self.min_ftd = ftd_info[0]
-        self.average_ftd = ftd_info[1]
-        self.max_ftds = ftd_info[2]
-        self.routebycor = None
-        self.gen_t = None
-        self.visit_t = []
-        self.fee = 0
-        self.type = 'bundle'
 
 def CustomerValueForRiderCalculator(rider, customer):
     """
@@ -66,7 +46,10 @@ def CalculateRho(lamda1, lamda2, mu1, mu2, add_lamda = 0, add_mu = 0):
     :param add_mu: additional mu
     :return: rho
     """
-    rho = (lamda1 + lamda2 + add_lamda) / (mu1 + mu2 + add_mu)
+    if mu1 + mu2 + add_mu > 0:
+        rho = (lamda1 + lamda2 + add_lamda) / (mu1 + mu2 + add_mu)
+    else:
+        rho = 2
     return round(rho, 4)
 
 
@@ -114,7 +97,8 @@ def RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres = 1):
     b2_num = 0
     b3_num = 0
     customer_num = 0
-    for order in platform_set:
+    for order_name in platform_set.platform:
+        order = platform_set.platform[order_name]
         if order.type == 'bundle':
             if len(order.customers) == 2:
                 b2_num += 1
@@ -161,7 +145,8 @@ def BreakBundle(break_info, platform_set, customer_set):
     b3 = []
     single_orders = []
     breaked_customer_names = []
-    for order in platform_set:
+    for order_name in platform_set.platform:
+        order = platform_set.platform[order_name]
         if order.type == 'bundle':
             if len(order.customers) == 2:
                 b2.append(order)
@@ -172,14 +157,17 @@ def BreakBundle(break_info, platform_set, customer_set):
     b2.sort(key=operator.attrgetter('average_ftd'), reverse=True)
     b3.sort(key=operator.attrgetter('average_ftd'), reverse=True)
     for break_b2 in range(min(break_info[0],len(b2))):
-        breaked_customer_names.append(b2[0].customers)
+        #breaked_customer_names.append(b2[0].customers)
+        breaked_customer_names += b2[0].customers
         del b2[0]
     for break_b3 in range(min(break_info[1],len(b3))):
-        breaked_customer_names.append(b3[0].customers)
+        #breaked_customer_names.append(b3[0].customers)
+        breaked_customer_names += b3[0].customers
         del b3[0]
     breaked_customers = []
     order_nums = []
-    for order in platform_set:
+    for order_name in platform_set.platform:
+        order = platform_set.platform[order_name]
         order_nums += order.customers
     order_num = max(order_nums) + 1
     for customer_name in breaked_customer_names:
@@ -208,6 +196,7 @@ def BundleConsist(orders, customers, p2, speed = 1,M = 1000):
         store_names.append(name + M)
     candi = order_names + store_names
     subset = itertools.permutations(candi, len(candi))
+    #print('번들 고려시 탐색 수 {}'.format(len(list(subset))))
     feasible_subset = []
     for route in subset:
         #print('고객이름',order_names,'가게이름',store_names,'경로',route)
@@ -449,22 +438,34 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
         lamda1 = len(unpicked_orders)
         idle_riders, mu2 = CountIdleRiders(riders, now_t, interval = interval, return_type = 'class')
         mu1 = len(idle_riders)
-        #p = CalculateRho(lamda1, lamda2, mu1, mu2)
-        p = 2
+        p = CalculateRho(lamda1, lamda2, mu1, mu2)
+        #p = 2
         rev_order = ConsideredCustomer(platform_set, orders, unserved_order_break = unserved_order_break)
         print('번들 생성에 고려되는 고객들 {}'.format(sorted(list(rev_order.keys()))))
         if p >= thres_p:
             if lamda1/3 < mu1 + mu2:
+                print("번들 계산 시작")
+                t1 = time.time()
                 b2,b3 = RequiredBundleNumber(lamda1, lamda2, mu1, mu2, thres=thres_p)
+                t2 = time.time()
+                print(f"번들 계산 처리시간：{t2 - t1}")
             else:
                 b2 = 0
                 b3 = int(lamda1/3)
             if b2 > 0:
+                print("B2 처리 시작")
+                t1 = time.time()
                 b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed)
+                t2 = time.time()
+                print(f"B2 처리시간：{t2 - t1}")
                 #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B2 = b2_bundle
             if b3 > 0:
+                print("B3 처리 시작")
+                t1 = time.time()
                 b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed)
+                t2 = time.time()
+                print(f"B3 처리시간：{t2 - t1}")
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B3 = b3_bundle
             print('B2:', B2)
@@ -518,3 +519,28 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
+def ResultPrint(name, customers, speed = 1):
+    served_customer = []
+    TLT = []
+    FLT = []
+    MFLT = []
+    for customer_name in customers:
+        customer = customers[customer_name]
+        if customer.time_info[3] != None:
+            lt = customer.time_info[3] - customer.time_info[0]
+            flt = customer.time_info[3] - customer.time_info[2]
+            mflt = distance(customer.store_loc, customer.location)/speed
+            TLT.append(lt)
+            FLT.append(flt)
+            MFLT.append(mflt)
+    try:
+        served_ratio = round(len(TLT)/len(customers),2)
+        av_TLT = round(sum(TLT)/len(TLT),2)
+        av_FLT = round(sum(FLT)/len(FLT),2)
+        av_MFLT = av_FLT - round(sum(MFLT)/len(MFLT),2)
+        print('시나리오 명 {} 전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(name, len(customers), len(TLT),served_ratio,av_TLT,
+                                                                             av_FLT, av_MFLT))
+        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT]
+    except:
+        print('TLT 수:  {}'.format(len(TLT)))
+        return None

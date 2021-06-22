@@ -4,7 +4,7 @@ import simpy
 import random
 from A1_BasicFunc import Ordergenerator, RiderGenerator
 from A1_Class import Store, Platform_pool
-from A2_Func import Platform_process
+from A2_Func import Platform_process, ResultPrint
 
 #Parameter define
 order_interval = 1
@@ -27,7 +27,7 @@ Rider_dict = {}
 rider_gen_interval = 10
 rider_speed = 2.5
 unserved_order_break = False
-rider_capacity = 5
+rider_capacity = 4
 
 #Before simulation, generate the stores.
 for store_name in range(store_num):
@@ -41,5 +41,6 @@ for store_name in range(store_num):
 env.process(RiderGenerator(env, Rider_dict, Platform2, Store_dict, Orders, speed = rider_speed,  interval = rider_gen_interval, runtime = run_time, gen_num = rider_num, capacity = rider_capacity))
 env.process(Ordergenerator(env, Orders, Store_dict, interval = order_interval))
 #env.process(Platform_process(env, Platform, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000, unserved_order_break= unserved_order_break))
-env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000, unserved_order_break= unserved_order_break))
+#env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed = rider_speed, end_t = 1000, unserved_order_break= unserved_order_break))
 env.run(run_time)
+ResultPrint(Orders, speed = rider_speed)

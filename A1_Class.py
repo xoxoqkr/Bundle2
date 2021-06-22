@@ -5,7 +5,7 @@ import operator
 import itertools
 import random
 import A1_BasicFunc as Basic
-
+import time
 
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
 # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
@@ -37,7 +37,7 @@ class Rider(object):
         self.served = []
         self.p2 = p2
         self.start_time = start_time
-        self.max_order_num = 3
+        self.max_order_num = 4
         env.process(self.RunProcess(env, platform, customers, stores, self.p2))
 
 
@@ -77,14 +77,15 @@ class Rider(object):
                     print('T: {} 라이더 : {} 노드 {} 이동 시작 예상 시간{}'.format(int(env.now), self.name, node_info, move_t))
                     if node_info[1] == 0: #가게인 경우
                         yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_t))
-                        print('T:{} 라이더{} 가게 {} 도착'.format(int(env.now), self.name, customers[node_info[0]].store))
+                        print('T:{} 라이더{} 고객{}을 위해 가게 {} 도착'.format(int(env.now), self.name, customers[node_info[0]].name,customers[node_info[0]].store))
                         self.container.append(node_info[0])
                         order.time_info[2] = env.now
+                        #input('가게 도착')
                     else:#고객인 경우
                         #input('T: {} 고객 {} 이동 시작'.format(int(env.now),node_info[0]))
                         yield env.process(self.RiderMoving(env, move_t))
-                        print('T: {} 고객 {} 도착'.format(int(env.now),node_info[0]))
-                        #input('체크5')
+                        print('T: {} 라이더 {} 고객 {} 도착'.format(int(env.now),self.name, node_info[0]))
+                        #input('고객 도착')
                         order.time_info[3] = env.now
                         self.container.remove(node_info[0])
                         self.onhand.remove(node_info[0])
@@ -108,8 +109,13 @@ class Rider(object):
                 test = []
                 for index in platform.platform:
                     test += [platform.platform[index].customers]
-                print('대상 주문들 {}'.format(test))
+                t1 = time.time()
+                print('대상 주문들 수 {}'.format(len(platform.platform)))
                 order_info = self.OrderSelect(platform, customers, p2 = p2)
+                t2 = time.time()
+                elapsed_time = t2 - t1
+                print(f"처리시간：{elapsed_time}")
+                #print('계산 종료 {} '.format(env.now))
                 if order_info != None:
                     #input('체크')
                     added_order = platform.platform[order_info[0]]
@@ -117,8 +123,11 @@ class Rider(object):
                     print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
                     self.OrderPick(added_order, order_info[1], customers, env.now)
                 else:
-                    yield env.timeout(wait_time)
-                    print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - 5, int(env.now)))
+                    if len(self.route) > 0:
+                        pass
+                    else:
+                        yield env.timeout(wait_time)
+                        print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - 5, int(env.now)))
 
 
     def OrderSelect(self, platform, customers, p2 = 0, sort_standard = 7):
@@ -138,16 +147,20 @@ class Rider(object):
             # 현재의 경로를 반영한 비용
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
-            #print('주문확인 {} / keys : {}'.format(order,platform.platform.keys()))
-            if order.picked == False and (len(exp_onhand_order) <= self.capacity or len(self.picked_orders) <= self.max_order_num):
+            print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
+            if order.picked == False and (len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num): #todo:라이더가 고려하는 주문의 수를 제한 해야함.
+                #print('계산 시작')
                 route_info = self.ShortestRoute(order, customers, p2=p2)
+                #print('계산 종료 {} '.format(len(route_info)))
                 if len(route_info) > 0:
                     score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
+                    print(score[-1])
                     if len(order.customers) > 1:
                         #input('점수 확인 {}'.format(score))
+
                         score[-1][6] = 0
                     #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
-            #print('확인2')
+            #input('확인2')
         if len(score) > 0:
             #input('라이더 {} 최단경로 실행/ 대상 경로 수 {}, 내용{}'.format(self.name, len(score), score[0]))
             score.sort(key=operator.itemgetter(sort_standard))
@@ -214,13 +227,18 @@ class Rider(object):
         candi = order_names + store_names
         #input('주문 목록2 {} /가게 목록2 {}'.format(order_names, store_names))
         #input('이미 방문한 노드 {} /삽입 대상 {}'.format(prior_route, candi))
-        subset = itertools.permutations(candi, len(candi))
-        #print('라이더 {} 탐색 대상 subset 수 : {}'.format(self.name, len(list(subset))))
+        t1 = time.time()
+        #print('itertools.permutations 시작')
+        #check = itertools.permutations(candi, len(candi))
+        subset = itertools.permutations(candi, len(candi)) # todo: permutations 사용으로 연산량 부하 지점
+        t2 = time.time()
+        #print(f"itertools.permutations 처리시간：{t2 - t1}")
+        #print('라이더 {} 탐색 대상 subset 수 :  / 입력 수 {}'.format(self.name,len(candi)))
         feasible_subset = []
         for route_part in subset:
             route = prior_route + list(route_part)
             #print('고려 되는 라우트:{}'.format(route))
-            sequence_feasiblity = True  # 모든 가게가 고객 보다 앞에 오는 경우. todo: 추가 조건이 걸리는 경우 feasible 의 True 에 걸리는 조건을 조정.
+            sequence_feasiblity = True
             feasible_routes = []
             for order_name in order_names:  # order_name + M : store name ;
                 if order_name + M in route:
@@ -253,7 +271,12 @@ class Rider(object):
                     #print('이미 서비스 받아서 고려 필요 X 고객 {}'.format(already_served_customer_names))
                     pass
                 # todo: FLT_Calculate 가 모든 형태의 경로에 대한 고려가 가능한기 볼 것.
+                #print('FTL계산시작')
+                t1 = time.time()
                 ftd_feasiblity, ftds = Basic.FLT_Calculate(order_customers, customers, route,  p2, except_names = already_served_customer_names, M=M, speed=self.speed, now_t=now_t)
+                #print('FTL계산종료')
+                t2 = time.time()
+                #print(f"FTL계산종료 itertools.permutations 처리시간：{t2 - t1}")
                 if ftd_feasiblity == True:
                     # print('ftds',ftds)
                     # input('멈춤5')
