@@ -12,12 +12,12 @@ order_interval = 5
 interval = 5
 p2 = 20
 thres_p = 1
-run_time = 50
+run_time = 800
 rider_working_time = 120
 #env = simpy.Environment()
-store_num = 10
-rider_num = 3
-rider_gen_interval = 10
+store_num = 20
+rider_num = 20
+rider_gen_interval = int(run_time/rider_num)
 rider_speed = 2.5
 rider_capacity = 4
 ITE_NUM = 2
@@ -81,7 +81,7 @@ for ite in range(ITE_NUM):
                 order_history.append([order.time_info[0], order.store, order.location])
             order_history.append([1000, 1, [25,25]])
             order_history.sort(key = operator.itemgetter(0))
-        input('주문 이력 수{}/ 생성 주문 수 {} '.format(len(order_history),len(Orders)))
+        #input('주문 이력 수{}/ 생성 주문 수 {} '.format(len(order_history),len(Orders)))
         index += 1
 
 for sc in scenarios:

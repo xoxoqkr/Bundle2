@@ -172,9 +172,11 @@ def BreakBundle(break_info, platform_set, customer_set):
     order_num = max(order_nums) + 1
     for customer_name in breaked_customer_names:
         route = [[customer_name, 0, customer_set[customer_name].store_loc, 0],[customer_name, 1, customer_set[customer_name].location, 0 ]]
-        order = Order(order_num,customer_name, route, 'single')
+        order = Order(order_num,[customer_name], route, 'single')
         breaked_customers.append(order)
-    res = single_orders + b2 + b3 + breaked_customers
+    res = {}
+    for order in single_orders + b2 + b3 + breaked_customers:
+        res[order.index] = order
     return res
 
 
@@ -408,7 +410,9 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
     """
     rev_order = {}  # 아직 서비스 되지 않은 고객 + 플렛폼에 있으나, 아직 번들로 구성되지 않은 주문 [KY] 고객 이름
     except_names = []
+    #input('확인1 {}'.format(platform_set.platform))
     for index in platform_set.platform:
+        #input('확인2 {}'.format(index))
         order = platform_set.platform[index]
         if order.type == 'single':
             if order.picked == False:
@@ -514,7 +518,8 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             if sum(rev_bundle_num) < sum(org_bundle_num):
                 break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]] #[B2 해체 수, B3 해체 수]
                 #번들의 해체가 필요
-                platform_set = BreakBundle(break_info, platform_set, orders)
+                platform_set.platform = BreakBundle(break_info, platform_set, orders)
+                #input('확인 3 {}'.format(platform_set.platform))
         print('T: {} B2,B3확인'.format(int(env.now)))
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)

@@ -147,14 +147,14 @@ class Rider(object):
             # 현재의 경로를 반영한 비용
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
-            print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
+            #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
             if order.picked == False and (len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num): #todo:라이더가 고려하는 주문의 수를 제한 해야함.
                 #print('계산 시작')
                 route_info = self.ShortestRoute(order, customers, p2=p2)
                 #print('계산 종료 {} '.format(len(route_info)))
                 if len(route_info) > 0:
                     score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
-                    print(score[-1])
+                    #print(score[-1])
                     if len(order.customers) > 1:
                         #input('점수 확인 {}'.format(score))
 
@@ -374,7 +374,10 @@ class Store(object):
                 received_orders_num = len(self.received_orders)
                 platform_exist_order = []
                 for index in platform.platform:
-                    platform_exist_order += platform.platform[index].customers
+                    try:
+                        platform_exist_order += platform.platform[index].customers
+                    except:
+                        print(' 에러 확인 용', platform.platform, index,platform.platform[index].customers)
                 #print('플랫폼에 있는 주문 {}'.format(platform_exist_order))
                 if received_orders_num > 0:
                     for count in range(min(slack,received_orders_num)):
