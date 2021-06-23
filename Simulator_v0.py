@@ -60,7 +60,7 @@ for ite in range(ITE_NUM):
         env.process(RiderGenerator(env, Rider_dict, Platform2, Store_dict, Orders, speed=rider_speed,
                                    interval=rider_gen_interval, runtime=run_time, gen_num=rider_num,
                                    capacity=rider_capacity, history= rider_history))
-        env.process(Ordergenerator(env, Orders, Store_dict, interval=order_interval, history = order_history))
+        env.process(Ordergenerator(env, Orders, Store_dict, interval=order_interval, history = order_history,runtime=run_time))
         if sc.platform_work == True:
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
                                          end_t=1000, unserved_order_break=sc.unserved_order_break))

@@ -87,9 +87,12 @@ class Rider(object):
                         print('T: {} 라이더 {} 고객 {} 도착'.format(int(env.now),self.name, node_info[0]))
                         #input('고객 도착')
                         order.time_info[3] = env.now
-                        self.container.remove(node_info[0])
-                        self.onhand.remove(node_info[0])
-                        self.served.append(node_info[0])
+                        try:
+                            self.container.remove(node_info[0])
+                            self.onhand.remove(node_info[0])
+                            self.served.append(node_info[0])
+                        except:
+                            input('현재 컨테이너::{}/들고 있는 주문::{}/대상 주문::{}'.format(self.container,self.onhand,node_info[0]))
                         #todo: order를 완료한 경우 order를 self.picked_orders에서 제거해야함.
                         for order_info in self.picked_orders:
                             done = True
@@ -295,7 +298,10 @@ class Rider(object):
                                 name = node - M
                                 info = [name, 0, customers[name].store_loc, 0]
                             rev_route.append(info)
-                    feasible_routes.append([rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])
+                    try:
+                        feasible_routes.append([rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])
+                    except:
+                        input('대상 경로 {} 고객들 {} '.format(rev_route, order_names))
                     #input('기존 경로 중 {} 제외 경로 {} -> 추가될 경로 {}'.format(route,prior_route,rev_route))
             if len(feasible_routes) > 0:
                 feasible_routes.sort(key=operator.itemgetter(5)) #가장 짧은 거리의 경로 선택.
