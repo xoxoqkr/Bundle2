@@ -20,11 +20,11 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
-        self.visited_route = []
+        self.visited_route = [[-1, -1, [25,25], int(env.now)]]
         self.speed = speed
         self.route = []
         self.run_process = None
@@ -40,7 +40,8 @@ class Rider(object):
         self.max_order_num = 4
         self.bound = bound
         self.idle_time = 0
-        env.process(self.RunProcess(env, platform, customers, stores, self.p2))
+        self.candidates = []
+        env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom))
 
 
     def RiderMoving(self, env, time):
@@ -53,7 +54,7 @@ class Rider(object):
         #print('현재1 T:{} 라이더{} 가게 {} 도착'.format(int(env.now),self.name, info ))
 
 
-    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2):
+    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2, freedom = True):
         """
         라이더의 행동 과정을 정의.
         1)주문 선택
@@ -108,19 +109,29 @@ class Rider(object):
                     #print('T: {} 노드 {} 도착 '.format(int(env.now), node_info))
                     self.last_departure_loc = self.route[0][2]
                     self.visited_route.append(self.route[0])
+                    self.visited_route[-1][3] = int(env.now)
                     del self.route[0]
                     print('남은 경로 {}'.format(self.route))
-            if len(self.onhand) < self.capacity:
+            freedom_para = True #todo : 라이더의 임의 주문 선택을 방지.
+            if freedom == False:
+                if len(self.route) > 0:
+                    freedom_para == False
+            if len(self.onhand) < self.capacity and freedom_para == True:
                 print('T{} 라이더 {} 추가 탐색 시작'.format(env.now, self.name))
                 test = []
                 for index in platform.platform:
                     test += [platform.platform[index].customers]
-                t1 = time.time()
-                print('대상 주문들 수 {}'.format(len(platform.platform)))
+                #t1 = time.time()
+                uppicked_order_num = 0
+                for order_index in platform.platform:
+                    if platform.platform[order_index].picked == False:
+                        uppicked_order_num += 1
+                print('플랫폼의 주문 수 {}/ 대기 중인 주문 수 {}'.format(len(platform.platform),uppicked_order_num))
+                self.candidates.append(len(platform.platform))
                 order_info = self.OrderSelect(platform, customers, p2 = p2)
-                t2 = time.time()
-                elapsed_time = t2 - t1
-                print(f"처리시간：{elapsed_time}")
+                #t2 = time.time()
+                #elapsed_time = t2 - t1
+                #print(f"처리시간：{elapsed_time}")
                 #print('계산 종료 {} '.format(env.now))
                 if order_info != None:
                     #input('체크')
@@ -153,11 +164,11 @@ class Rider(object):
         @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
         """
         score = []
+        bound_order_names = []
         for index in platform.platform:
             # 현재의 경로를 반영한 비용
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
-            bound_order_names = []
             #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
             if order.picked == False and (len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num):
                 if type(order.route[0]) != list:
@@ -166,23 +177,27 @@ class Rider(object):
                 info = [order.index,dist]
                 bound_order_names.append(info)
             bound_order_names.sort(key = operator.itemgetter(1))
-        for info in bound_order_names[:self.bound]: #todo : route의 시작 위치와 자신의 위치사이의 거리가 가까운 bound개의 주문 중 선택.
-            order = platform.platform[info[0]]
-            route_info = self.ShortestRoute(order, customers, p2=p2)
-            #print('계산 종료 {} '.format(len(route_info)))
-            if len(route_info) > 0:
-                score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
-                if len(order.customers) > 1:
-                    #score[-1][6] = 0 #todo: 번들이 선택 될 수 있도록 incentive 필요?
-                    pass
-                #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
-        #input('확인2')
+        if len(bound_order_names) > 0:
+            for info in bound_order_names[:self.bound]: #todo : route의 시작 위치와 자신의 위치사이의 거리가 가까운 bound개의 주문 중 선택.
+                order = platform.platform[info[0]]
+                route_info = self.ShortestRoute(order, customers, p2=p2)
+                #print('계산 종료 {} '.format(len(route_info)))
+                if len(route_info) > 0:
+                    score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
+                    if len(order.customers) > 1:
+                        #score[-1][6] = 0 #todo: 번들이 선택 될 수 있도록 incentive 필요?
+                        pass
+                    #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
+            #input('확인2')
         if len(score) > 0:
             #input('라이더 {} 최단경로 실행/ 대상 경로 수 {}, 내용{}'.format(self.name, len(score), score[0]))
+            #self.candidates.append(len(score))
+            #input('선택지 수 {}'.format(len(score)))
             score.sort(key=operator.itemgetter(sort_standard))
             # input('최단경로 실행1/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
             return score[0]
         else:
+            print('가능한 주문 X/ 대상 주문{}'.format(len(bound_order_names)))
             return None
 
 
@@ -477,3 +492,4 @@ class Customer(object):
 class Platform_pool(object):
     def __init__(self):
         self.platform = {}
+        self.info = []

@@ -108,7 +108,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     return True, ftds
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None):
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -122,23 +122,18 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     :param runtime: 시뮬레이션 동작 시간
     :param gen_num: 생성 라이더 수
     """
-    if history == None:
-        rider_num = 0
-        while env.now <= runtime and rider_num <= gen_num:
-            single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity)
-            Rider_dict[rider_num] = single_rider
-            rider_num += 1
-            print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
-            yield env.timeout(interval)
-    else:
-        rider_num = 0
-        while env.now <= runtime and rider_num <= gen_num:
-            single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity)
-            Rider_dict[rider_num] = single_rider
-            rider_num += 1
-            print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
+    rider_num = 0
+    while env.now <= runtime and rider_num <= gen_num:
+        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom)
+        Rider_dict[rider_num] = single_rider
+        rider_num += 1
+        #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
+        if history != None:
             next = history[rider_num + 1] - history[rider_num]
             yield env.timeout(next)
+        else:
+            yield env.timeout(interval)
+
 
 
 def Ordergenerator(env, orders, stores, interval = 5, runtime = 100, history = None):

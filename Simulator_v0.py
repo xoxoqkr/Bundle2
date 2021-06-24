@@ -8,17 +8,17 @@ from A2_Func import Platform_process, ResultPrint
 import operator
 
 #Parameter define
-order_interval = 4
+order_interval = 1
 interval = 5
-p2 = 20
+p2 = 15
 thres_p = 1
-run_time = 400
+run_time = 100
 rider_working_time = 120
 #env = simpy.Environment()
 store_num = 20
-rider_num = 20
-rider_gen_interval = int(run_time/rider_num)
-rider_speed = 2.5
+rider_num = 5
+rider_gen_interval = 1
+rider_speed = 4
 rider_capacity = 4
 ITE_NUM = 1
 
@@ -33,7 +33,7 @@ class scenario(object):
 scenarios = []
 
 infos = [['A',False, False],['B',True, True],['C',True, False]]
-infos = [['B',True, False]]
+infos = [['A',False, False],['B',True, False]]
 for info in infos:
     sc = scenario(info[0], info[1], info[2])
     scenarios.append(sc)
@@ -90,11 +90,15 @@ for ite in range(ITE_NUM):
                 print('문제 고객 {} 서비스 수 {}'.format(customer.name, customer.who_serve))
         res = []
         wait_time = 0
+        candis = []
         for rider_name in Rider_dict:
             rider = Rider_dict[rider_name]
             res += rider.served
             wait_time += rider.idle_time
-        print('라이더 수 {} 평균 수행 주문 수 {} 평균 유휴 분 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2)))
+            candis += rider.candidates
+            print('라이더 {} 경로 :: {}'.format(rider.name, rider.visited_route))
+        print('candis 수 {}'.format(candis))
+        print('라이더 수 {} 평균 수행 주문 수 {} 평균 유휴 분 {} 평균 후보 수 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2),round(sum(candis)/len(candis),2)))
 for sc in scenarios:
     count = 1
     for res_info in sc.res:
