@@ -8,11 +8,11 @@ from A2_Func import Platform_process, ResultPrint
 import operator
 
 #Parameter define
-order_interval = 5
+order_interval = 4
 interval = 5
 p2 = 20
 thres_p = 1
-run_time = 800
+run_time = 400
 rider_working_time = 120
 #env = simpy.Environment()
 store_num = 20
@@ -20,7 +20,7 @@ rider_num = 20
 rider_gen_interval = int(run_time/rider_num)
 rider_speed = 2.5
 rider_capacity = 4
-ITE_NUM = 2
+ITE_NUM = 1
 
 
 class scenario(object):
@@ -33,6 +33,7 @@ class scenario(object):
 scenarios = []
 
 infos = [['A',False, False],['B',True, True],['C',True, False]]
+infos = [['B',True, False]]
 for info in infos:
     sc = scenario(info[0], info[1], info[2])
     scenarios.append(sc)
@@ -83,7 +84,17 @@ for ite in range(ITE_NUM):
             order_history.sort(key = operator.itemgetter(0))
         #input('주문 이력 수{}/ 생성 주문 수 {} '.format(len(order_history),len(Orders)))
         index += 1
-
+        for customer_name in Orders:
+            customer = Orders[customer_name]
+            if len(customer.who_serve) > 1:
+                print('문제 고객 {} 서비스 수 {}'.format(customer.name, customer.who_serve))
+        res = []
+        wait_time = 0
+        for rider_name in Rider_dict:
+            rider = Rider_dict[rider_name]
+            res += rider.served
+            wait_time += rider.idle_time
+        print('라이더 수 {} 평균 수행 주문 수 {} 평균 유휴 분 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2)))
 for sc in scenarios:
     count = 1
     for res_info in sc.res:

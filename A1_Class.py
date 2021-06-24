@@ -20,7 +20,7 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
@@ -38,6 +38,8 @@ class Rider(object):
         self.p2 = p2
         self.start_time = start_time
         self.max_order_num = 4
+        self.bound = bound
+        self.idle_time = 0
         env.process(self.RunProcess(env, platform, customers, stores, self.p2))
 
 
@@ -51,7 +53,7 @@ class Rider(object):
         #print('현재1 T:{} 라이더{} 가게 {} 도착'.format(int(env.now),self.name, info ))
 
 
-    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 5):
+    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2):
         """
         라이더의 행동 과정을 정의.
         1)주문 선택
@@ -68,7 +70,7 @@ class Rider(object):
                 node_info = self.route[0]
                 #print('T: {} 라이더 :{} 노드 정보 {} 경로 {}'.format(int(env.now),self.name, node_info,self.route))
                 #('체크1')
-                order = customers[node_info[0]]
+                order = customers[node_info[0]] #customer
                 store_name = order.store
                 move_t = Basic.distance(self.last_departure_loc, node_info[2]) / self.speed
                 with self.resource.request() as req:
@@ -87,6 +89,7 @@ class Rider(object):
                         print('T: {} 라이더 {} 고객 {} 도착'.format(int(env.now),self.name, node_info[0]))
                         #input('고객 도착')
                         order.time_info[3] = env.now
+                        order.who_serve.append([self.name, int(env.now)])
                         try:
                             self.container.remove(node_info[0])
                             self.onhand.remove(node_info[0])
@@ -122,6 +125,8 @@ class Rider(object):
                 if order_info != None:
                     #input('체크')
                     added_order = platform.platform[order_info[0]]
+                    print('대상 주문들 선택 여부:: 인덱스 {} 고객들{} 선택여부{}'.format(added_order.index, added_order.customers,
+                                                                      added_order.picked))
                     print('T: {}/ 라이더 {}/ 주문 {} 선택 / 고객들 {}'.format(int(env.now), self.name, added_order.index, added_order.customers))
                     print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
                     self.OrderPick(added_order, order_info[1], customers, env.now)
@@ -130,7 +135,8 @@ class Rider(object):
                         pass
                     else:
                         yield env.timeout(wait_time)
-                        print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - 5, int(env.now)))
+                        self.idle_time += wait_time
+                        print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - wait_time, int(env.now)))
 
 
     def OrderSelect(self, platform, customers, p2 = 0, sort_standard = 7):
@@ -143,6 +149,7 @@ class Rider(object):
         @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
         @param p2: 허용 Food Lead Time의 최대 값
         @param sort_standard: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
+        @param bound: 선택할 수 있는 주문 중 라이더가 고려할 수 있는 주문의 수
         @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
         """
         score = []
@@ -150,20 +157,26 @@ class Rider(object):
             # 현재의 경로를 반영한 비용
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
+            bound_order_names = []
             #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
-            if order.picked == False and (len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num): #todo:라이더가 고려하는 주문의 수를 제한 해야함.
-                #print('계산 시작')
-                route_info = self.ShortestRoute(order, customers, p2=p2)
-                #print('계산 종료 {} '.format(len(route_info)))
-                if len(route_info) > 0:
-                    score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
-                    #print(score[-1])
-                    if len(order.customers) > 1:
-                        #input('점수 확인 {}'.format(score))
-
-                        score[-1][6] = 0
-                    #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
-            #input('확인2')
+            if order.picked == False and (len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num):
+                if type(order.route[0]) != list:
+                    input('에러 확인 {} : {}'.format(self.last_departure_loc,order.route))
+                dist = Basic.distance(self.last_departure_loc, order.route[0][2])/self.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
+                info = [order.index,dist]
+                bound_order_names.append(info)
+            bound_order_names.sort(key = operator.itemgetter(1))
+        for info in bound_order_names[:self.bound]: #todo : route의 시작 위치와 자신의 위치사이의 거리가 가까운 bound개의 주문 중 선택.
+            order = platform.platform[info[0]]
+            route_info = self.ShortestRoute(order, customers, p2=p2)
+            #print('계산 종료 {} '.format(len(route_info)))
+            if len(route_info) > 0:
+                score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
+                if len(order.customers) > 1:
+                    #score[-1][6] = 0 #todo: 번들이 선택 될 수 있도록 incentive 필요?
+                    pass
+                #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
+        #input('확인2')
         if len(score) > 0:
             #input('라이더 {} 최단경로 실행/ 대상 경로 수 {}, 내용{}'.format(self.name, len(score), score[0]))
             score.sort(key=operator.itemgetter(sort_standard))
@@ -301,7 +314,9 @@ class Rider(object):
                     try:
                         feasible_routes.append([rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])
                     except:
-                        input('대상 경로 {} 고객들 {} '.format(rev_route, order_names))
+                        #input('대상 경로 {} 고객들 {} '.format(rev_route, order_names))
+                        print('대상 경로 {} 고객들 {} '.format(rev_route, order_names))
+
                     #input('기존 경로 중 {} 제외 경로 {} -> 추가될 경로 {}'.format(route,prior_route,rev_route))
             if len(feasible_routes) > 0:
                 feasible_routes.sort(key=operator.itemgetter(5)) #가장 짧은 거리의 경로 선택.
@@ -328,6 +343,9 @@ class Rider(object):
             customers[name].time_info[1] = now_t
             #print('주문 {}의 고객 {} 가게 위치{} 고객 위치{}'.format(order.index, name, customers[name].store_loc, customers[name].location))
         #print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
+        if route[0][1] != 0:
+            #input('삽입 경로에 문제 발생:: 삽입경로 {}'.format(route))
+            pass
         self.route = route
         self.onhand += names
         self.picked_orders.append([order.index, names])
@@ -454,6 +472,7 @@ class Customer(object):
         self.type = 'single_order'
         self.fee = fee
         self.ready_time = None #가게에서 음식이 조리 완료된 시점
+        self.who_serve = []
 
 class Platform_pool(object):
     def __init__(self):

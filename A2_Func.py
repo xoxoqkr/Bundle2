@@ -349,7 +349,7 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     return idle_riders, len(interval_riders)
 
 
-def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
+def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000):
     """
     Construct unpicked_orders with bundled customer
     :param bundles: constructed bundles
@@ -363,9 +363,21 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
     for info in bundle_infos:
         bundle_names += info[4]
         if len(bundle_names) == 1:
-            o = Order(order_index, info[4], info[0], 'single')
+            customer = customer_set[info[4]]
+            route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
+            o = Order(order_index, info[4], route, 'single')
         else:
-            o = Order(order_index, info[4], info[0], 'bundle')
+            route = []
+            for node in info[0]:
+                if node >= M:
+                    customer_name = node - M
+                    customer = customer_set[customer_name]
+                    route.append([customer_name, 0, customer.store_loc, 0])
+                else:
+                    customer_name = node
+                    customer = customer_set[customer_name]
+                    route.append([customer_name, 1, customer.location, 0])
+            o = Order(order_index, info[4], route, 'bundle')
         o.average_ftd = info[2]
         res[order_index] = o
         #res.append(o)
@@ -374,7 +386,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
     for index in platform_set.platform:
         order = platform_set.platform[index]
         if order.type == 'single':
-            if order.customers[0] not in bundle_names and order.picked == False:
+            if order.customers[0] not in bundle_names and order.picked == False and customer_set[order.customers[0]].time_info[1] == None:
                 res[order.index] = order
             else:
                 pass
@@ -391,12 +403,13 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set):
         if customer_name not in bundle_names + already_ordered_customer_names:
             names.append(customer_name)
             customer = customer_set[customer_name]
-            singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
-            o = Order(order_index, [customer_name], singleroute, 'single')
-            #res.append(o)
-            res[order_index] = o
-            order_index += 1
-            print('추가 정보22 {}'.format(customer_name))
+            if customer.time_info[1] == None:
+                singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
+                o = Order(order_index, [customer_name], singleroute, 'single')
+                #res.append(o)
+                res[order_index] = o
+                order_index += 1
+                print('추가 정보22 {}'.format(customer_name))
     return res
 
 
@@ -415,7 +428,7 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
         #input('확인2 {}'.format(index))
         order = platform_set.platform[index]
         if order.type == 'single':
-            if order.picked == False:
+            if order.picked == False and orders[order.customers[0]].time_info[1] == None:
                 rev_order[order.customers[0]] = orders[order.customers[0]]
             else: #already picked customer
                 pass
@@ -431,6 +444,18 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
         customer = orders[customer_name]
         if customer.time_info[1] == None and customer_name not in list(rev_order.keys()) + except_names:
             rev_order[customer_name] = customer
+    print1 = []
+    for order_name in rev_order:
+        order = rev_order[order_name]
+        #print1 += order.customers
+        print1.append(order.name)
+    print2 = []
+    for customer_name in orders:
+        customer = orders[customer_name]
+        if customer.time_info[1] != None:
+            print2.append(customer.name)
+    print('번들 대상 고객 {}'.format(print1))
+    print('실려있는 고객 {}'.format(print2))
     return rev_order
 
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True):
