@@ -7,6 +7,9 @@ import numpy
 import simpy
 import math
 import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+import pandas as pd
+
 
 class Order(object):
     def __init__(self, name, input_value):
@@ -90,10 +93,19 @@ class StepwiseSearch(object):
         scores.sort(key=operator.itemgetter(1), reverse = True)
         return scores[0][0]
 
+
+    def TimeDiscount(self, discount_ratio = 0.9):
+        for net in self.nets:
+            self.nets[net] = round(self.nets[net]*discount_ratio,4)
+
+
     def Updater(self, data, orders):
-        if self.ite > 1 and self.ite % self.T == 0:
-            #input('그물 추가')
-            self.NetUpdater()
+        if self.ite > 1 :
+            if self.ite % self.T == 0:
+                self.NetUpdater()#input('그물 추가')
+            elif self.ite % 10 == 0:
+                #self.TimeDiscount()
+                pass
         #점수 갱신
         res_1s = []
         res_0s = []
@@ -115,6 +127,7 @@ class StepwiseSearch(object):
         self.ratio.append(len(res_1s)/len(self.nets))
 ##실행부
 
+
 #1라이더 정의
 Riders = {}
 vector = [round(random.random(),2),-round(random.random(),2)]
@@ -123,6 +136,7 @@ for name in range(3):
     Riders[name] = r
 
 #2Stepwise 시작 정의
+ITE = 500
 beta = 0.8
 init_nets = {}
 for i in numpy.arange(-1,1,0.4):
@@ -133,14 +147,16 @@ engine = StepwiseSearch(1, None, init_nets, 0.4)
 
 Orders = {}
 pool = list(numpy.arange(0, 10, 0.1))
-for t in range(500):
+for t in range(ITE):
     observation = []
     possible_customer_count = 0
     for name in Orders:
         if Orders[name].selected == False:
             possible_customer_count += 1
-    if possible_customer_count < len(Riders):
-        for name in range(len(Orders), len(Orders) + 4):
+    if possible_customer_count < len(Riders) + 10:
+        name_start = len(Orders)
+        name_end = len(Orders) + 10
+        for name in range(name_start, name_end):
             vector = random.sample(pool,2)
             o = Order(name, vector)
             Orders[name] = o
@@ -167,6 +183,7 @@ for net in engine.nets:
     x.append(net[0])
     y.append(net[1])
     z.append(engine.nets[net])
+
 rev_z = []
 max_val = max(z)
 for info in z:
@@ -174,15 +191,28 @@ for info in z:
 vectors.sort(key= operator.itemgetter(1), reverse= True)
 count = 1
 for info in vectors[:20]:
-    print('순위 : {}, 정보 {} 점수 {} 비율 {} '.format(count, info[0], info[1],info[0][0]/info[0][1]))
+    #print('순위 : {}, 정보 {} 점수 {} 비율 {} '.format(count, info[0], info[1],info[0][0]/info[0][1]))
     count += 1
 
 vectors.sort(key= operator.itemgetter(1))
 count = 1
 for info in vectors[:20]:
-    print('순위 : 하위 {}, 정보 {} 점수 {} 비율 {}'.format(count, info[0], info[1],info[0][0]/info[0][1]))
+    #print('순위 : 하위 {}, 정보 {} 점수 {} 비율 {}'.format(count, info[0], info[1],info[0][0]/info[0][1]))
     count += 1
 print('평균 1 획득률 {}/ 평균 점수 {}'.format(sum(engine.ratio)/len(engine.ratio), sum(test)/len(test)))
+
+#클러스터 탐색
+rev_data = []
+for index in range(len(x)):
+    #for _ in range(int(z[index])):
+    #    rev_data.append([x[index], y[index]])
+    rev_data.append([x[index], y[index]])
+rev_data = numpy.array(rev_data)
+#kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data)
+kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
+print('목표 {}'.format(Riders[0].coeff_vector))
+print('결과 {}'.format(kmeans.cluster_centers_[0]))
+
 
 rev_z = numpy.array(rev_z)
 alphas = numpy.array(rev_z)
@@ -193,9 +223,36 @@ rgba_colors[:,0] = 1.0
 # the fourth column needs to be your alphas
 rgba_colors[:, 3] = alphas
 
-plt.scatter(x,y, color=rgba_colors)
+plt.scatter(x,y, color=rgba_colors, s = 5)
+plt.scatter(Riders[0].coeff_vector[0], Riders[0].coeff_vector[1], color = 'b', marker= "X", s = 20)
+cluster = [round(kmeans.cluster_centers_[0][0],4), round(kmeans.cluster_centers_[0][1],4)]
+plt.scatter(cluster[0], cluster[1], color = 'g', marker= "*", s = 20)
 #plt.scatter(x,y, label='sample', alpha=rev_z)
-plt.xlabel(' x1', labelpad= 10)
-plt.ylabel(' x2', labelpad= 10)
-plt.title('Target Value -> x1:{} x2:{}'.format(Riders[0].coeff_vector[0],Riders[0].coeff_vector[1]))
+plt.xlabel(' c1', labelpad= 10)
+plt.ylabel(' c2', labelpad= 10)
+plt.title('Target Value -> c1:{} c2:{}/Cluster {} {}'.format(Riders[0].coeff_vector[0],Riders[0].coeff_vector[1],cluster[0], cluster[1]))
+#todo : weighted linear regression 삽입.
+z = numpy.array(z)
+p1, p2 = numpy.polynomial.polynomial.polyfit(x, y, 1, w=z)
+def func(p1, p2, x):
+    return  p1 * x + p2
+x = numpy.array(x)
+plt.plot(x, func(p1, p2, x))
+"""
+plt.scatter(x, y)
+
+w = np.ones(x.shape[0])
+w[1] = 12
+# p1, p2 = np.polyfit(x, y, 1, w=w)
+p1, p2 = np.polynomial.polynomial.polyfit(x, y, 1, w=w)
+print(p1, p2, w)
+
+plt.plot(x, func(p1, p2, x))
+
+
+x = numpy.array(x)
+m, b = numpy.polyfit(x, y, 1)
+plt.plot(x, m*x + b)
+plt.show()
+"""
 plt.show()
