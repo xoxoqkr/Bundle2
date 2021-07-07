@@ -4,6 +4,7 @@ import itertools
 from A1_BasicFunc import RouteTime, distance, FLT_Calculate
 from A1_Class import Order
 import time
+import matplotlib.pyplot as plt
 
 
 def CustomerValueForRiderCalculator(rider, customer):
@@ -172,7 +173,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     order_num = max(order_nums) + 1
     for customer_name in breaked_customer_names:
         route = [[customer_name, 0, customer_set[customer_name].store_loc, 0],[customer_name, 1, customer_set[customer_name].location, 0 ]]
-        order = Order(order_num,[customer_name], route, 'single')
+        order = Order(order_num,[customer_name], route, 'single', fee = customer_set[customer_name].fee)
         breaked_customers.append(order)
     res = {}
     for order in single_orders + b2 + b3 + breaked_customers:
@@ -180,7 +181,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     return res
 
 
-def BundleConsist(orders, customers, p2, speed = 1,M = 1000):
+def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, option = False):
     """
     Construct bundle consists of orders
     :param orders: customer order in the route. type: customer class
@@ -197,7 +198,19 @@ def BundleConsist(orders, customers, p2, speed = 1,M = 1000):
     for name in order_names:
         store_names.append(name + M)
     candi = order_names + store_names
-    subset = itertools.permutations(candi, len(candi))
+    if option == False:
+        subset = itertools.permutations(candi, len(candi))
+    else:
+        store_subset = itertools.permutations(store_names, len(store_names))
+        store_subset = list(store_subset)
+        order_subset = itertools.permutations(order_names, len(order_names))
+        order_subset = list(order_subset)
+        subset = []
+        for store in store_subset:
+            for order in order_subset:
+                tem = store + order
+                subset.append(tem)
+        pass
     #print('번들 고려시 탐색 수 {}'.format(len(list(subset))))
     feasible_subset = []
     for route in subset:
@@ -211,30 +224,45 @@ def BundleConsist(orders, customers, p2, speed = 1,M = 1000):
                 sequence_feasiblity = False
                 break
         if sequence_feasiblity == True:
-            #print('순서는 만족', route)
-            #input('멈춤3')
             ftd_feasiblity, ftds = FLT_Calculate(orders, customers, route, p2, [],M = M ,speed = speed)
             #customer_in_order, customers, route, p2, except_names, M = 1000, speed = 1, now_t = 0
             if ftd_feasiblity == True:
-                #print('ftds',ftds)
-                #input('멈춤5')
                 route_time = RouteTime(orders, route, speed=speed, M=M)
-                feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names,round(route_time,2)])
+                feasible_routes.append([route, round(max(ftds), 2), round(sum(ftds) / len(ftds), 2), round(min(ftds), 2), order_names,round(route_time, 2)])
+                #print('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(route_time, time_thres))
+                #if route_time < time_thres :
+                #    feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names,round(route_time,2)])
+                #    input('번들 생성 절약 시간 {}'.format(time_thres - route_time))
                 #[경로, 최대FTD, 평균FTD, 최소FTD]
         if len(feasible_routes) > 0:
             feasible_routes.sort(key = operator.itemgetter(2))
             feasible_subset.append(feasible_routes[0])
-            #print('가능 경로', feasible_routes)
-            #input('멈춤6')
     if len(feasible_subset) > 0:
         feasible_subset.sort(key = operator.itemgetter(2))
+        #그래프 그리기
+        x = []
+        y = []
+        for node in feasible_subset[0][0]:
+            if node > M:
+                name = node - M
+                x.append(customers[name].store_loc[0])
+                y.append(customers[name].store_loc[1])
+            else:
+                x.append(customers[node].location[0])
+                y.append(customers[node].location[1])
+        plt.plot(x, y, linestyle='solid', color='blue')
+        plt.title("Connected Scatterplot points with line")
+        plt.xlabel("x")
+        plt.ylabel("sinx")
+        plt.show()
+        input('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(feasible_subset[0][5], time_thres))
         return feasible_subset[0]
     else:
         return []
 
 
 
-def ConstructBundle(orders, s, n, p2, speed = 1):
+def ConstructBundle(orders, s, n, p2, speed = 1, option = False):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -263,9 +291,11 @@ def ConstructBundle(orders, s, n, p2, speed = 1):
         for m in M:
             q = list(m) + [order.name]
             subset_orders = []
+            time_thres = 0 #3개의 경로를 연속으로 가는 것 보다는
             for name in q:
                 subset_orders.append(orders[name])
-            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed)
+                time_thres += orders[name].distance/speed
+            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres)
             if len(tem_route_info) > 0:
                 b.append(tem_route_info)
         if len(b) > 0:
@@ -365,7 +395,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
         if len(bundle_names) == 1:
             customer = customer_set[info[4]]
             route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
-            o = Order(order_index, info[4], route, 'single')
+            o = Order(order_index, info[4], route, 'single', fee = customer.fee)
         else:
             route = []
             for node in info[0]:
@@ -377,7 +407,10 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
                     customer_name = node
                     customer = customer_set[customer_name]
                     route.append([customer_name, 1, customer.location, 0])
-            o = Order(order_index, info[4], route, 'bundle')
+            fee = 0
+            for customer_name in info[4]:
+                fee += customer_set[customer_name].fee
+            o = Order(order_index, info[4], route, 'bundle', fee = fee)
         o.average_ftd = info[2]
         res[order_index] = o
         #res.append(o)
@@ -405,7 +438,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
             customer = customer_set[customer_name]
             if customer.time_info[1] == None:
                 singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
-                o = Order(order_index, [customer_name], singleroute, 'single')
+                o = Order(order_index, [customer_name], singleroute, 'single', fee = customer.fee)
                 #res.append(o)
                 res[order_index] = o
                 order_index += 1
@@ -458,7 +491,7 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
     print('실려있는 고객 {}'.format(print2))
     return rev_order
 
-def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True):
+def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False):
     B2 = []
     B3 = []
     while env.now <= end_t:
@@ -484,7 +517,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             if b2 > 0:
                 print("B2 처리 시작")
                 t1 = time.time()
-                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed)
+                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed, option = option)
                 t2 = time.time()
                 print(f"B2 처리시간：{t2 - t1}")
                 #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
@@ -492,7 +525,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             if b3 > 0:
                 print("B3 처리 시작")
                 t1 = time.time()
-                b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed)
+                b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed, option = option)
                 t2 = time.time()
                 print(f"B3 처리시간：{t2 - t1}")
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]

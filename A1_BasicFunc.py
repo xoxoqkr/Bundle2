@@ -126,17 +126,20 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     while env.now <= runtime and rider_num <= gen_num:
         single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom)
         Rider_dict[rider_num] = single_rider
-        rider_num += 1
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
+        print('라이더 {} 생성. T {}'.format(rider_num, int(env.now)))
         if history != None:
-            next = history[rider_num + 1] - history[rider_num]
+            #next = history[rider_num + 1] - history[rider_num]
+            next = history[rider_num]
             yield env.timeout(next)
         else:
             yield env.timeout(interval)
+        rider_num += 1
 
 
 
-def Ordergenerator(env, orders, stores, interval = 5, runtime = 100, history = None):
+
+def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None):
     """
     Generate customer order
     :param env: Simpy Env
@@ -151,7 +154,7 @@ def Ordergenerator(env, orders, stores, interval = 5, runtime = 100, history = N
         #process_time = random.randrange(1,5)
         #input_location = [36,36]
         if history == None:
-            input_location = random.sample(list(range(50)),2)
+            input_location = random.sample(list(range(max_range)),2)
             store_num = random.randrange(0, len(stores))
         else:
             input_location = history[name][2]

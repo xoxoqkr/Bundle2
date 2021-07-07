@@ -99,10 +99,12 @@ class StepwiseSearch(object):
             self.nets[net] = round(self.nets[net]*discount_ratio,4)
 
 
-    def Updater(self, data, orders):
+    def Updater(self, data, orders, rider = None):
         if self.ite > 1 :
             if self.ite % self.T == 0:
-                self.NetUpdater()#input('그물 추가')
+                #self.NetUpdater()#input('그물 추가')
+                #GrahDraw(self, rider)
+                pass
             elif self.ite % 10 == 0:
                 #self.TimeDiscount()
                 pass
@@ -125,6 +127,39 @@ class StepwiseSearch(object):
         for info in res_1s:
             self.nets[info[0]] += info[1]
         self.ratio.append(len(res_1s)/len(self.nets))
+
+def GrahDraw(engine, rider):
+    vectors = []
+    test = []
+    x = []
+    y = []
+    z = []
+    for net in engine.nets:
+        vectors.append([net, engine.nets[net]])
+        test.append(engine.nets[net])
+        x.append(net[0])
+        y.append(net[1])
+        z.append(engine.nets[net])
+    rev_z = []
+    max_val = max(z)
+    for info in z:
+        rev_z.append(info / max_val)
+    vectors.sort(key=operator.itemgetter(1), reverse=True)
+    rev_z = numpy.array(rev_z)
+    alphas = numpy.array(rev_z)
+    # 색깔 농도 관련 -> https://stackoverflow.com/questions/24767355/individual-alpha-values-in-scatter-plot
+    rgba_colors = numpy.zeros((len(x), 4))
+    # for red the first column needs to be one
+    rgba_colors[:, 0] = 1.0
+    # the fourth column needs to be your alphas
+    rgba_colors[:, 3] = alphas
+    plt.scatter(x, y, color=rgba_colors, s=5)
+    plt.scatter(rider.coeff_vector[0], rider.coeff_vector[1], color='b', marker="X", s=20)
+    plt.xlabel(' c1', labelpad=10)
+    plt.ylabel(' c2', labelpad=10)
+    plt.title('ITE {} :: Target Value -> c1:{} c2:{}'.format(engine.ite, rider.coeff_vector[0], rider.coeff_vector[1]))
+    plt.show()
+    input('Next -> ITE {}'.format(engine.ite))
 ##실행부
 
 
@@ -167,7 +202,10 @@ for t in range(ITE):
             observation.append(ob)
     for ob in observation:
         print('대상 데이터 {}'.format(ob))
-        engine.Updater(ob, Orders)
+        engine.Updater(ob, Orders, Riders[0])
+    if engine.ite % engine.T == 0 and engine.ite > 0:
+        engine.NetUpdater()
+        GrahDraw(engine, Riders[0])
     engine.ite += 1
     print('ITE {} 종료'.format(t))
 

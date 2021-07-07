@@ -10,17 +10,19 @@ import time
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
 # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
 class Order(object):
-    def __init__(self, order_name, customer_names, route, order_type):
+    def __init__(self, order_name, customer_names, route, order_type, fee = 0):
         self.index = order_name
         self.customers = customer_names
         self.route = route
         self.picked = False
         self.type = order_type #1:단주문, 2:B2, 3:B3
         self.average_ftd = None
+        self.fee = fee
+
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
@@ -37,10 +39,11 @@ class Rider(object):
         self.served = []
         self.p2 = p2
         self.start_time = start_time
-        self.max_order_num = 4
+        self.max_order_num = max_order_num
         self.bound = bound
         self.idle_time = 0
         self.candidates = []
+        self.b_select = 0
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom))
 
 
@@ -141,6 +144,8 @@ class Rider(object):
                     print('T: {}/ 라이더 {}/ 주문 {} 선택 / 고객들 {}'.format(int(env.now), self.name, added_order.index, added_order.customers))
                     print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
                     self.OrderPick(added_order, order_info[1], customers, env.now)
+                    if len(added_order.route) > 2:
+                        self.b_select += 1
                 else:
                     if len(self.route) > 0:
                         pass
@@ -183,9 +188,10 @@ class Rider(object):
                 route_info = self.ShortestRoute(order, customers, p2=p2)
                 #print('계산 종료 {} '.format(len(route_info)))
                 if len(route_info) > 0:
-                    score.append([order.index] + route_info + [route_info[5]/len(order.customers)])
+                    benefit = order.fee/route_info[5] #이익 / 운행 시간
+                    score.append([order.index] + route_info + [benefit])
                     if len(order.customers) > 1:
-                        #score[-1][6] = 0 #todo: 번들이 선택 될 수 있도록 incentive 필요?
+                        score[-1][7] = 3 - len(order.customers) #todo: 번들이 선택 될 수 있도록 incentive 필요?
                         pass
                     #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
             #input('확인2')
@@ -426,7 +432,7 @@ class Store(object):
                             order_index = max(list(platform.platform.keys())) + 1
                         else:
                             order_index = 1
-                        o = Order(order_index, [order.name],route,'single')
+                        o = Order(order_index, [order.name],route,'single', fee = order.fee)
                         #print('주문 정보',o.index, o.customers, o.route, o.type)
                         if o.customers[0] not in platform_exist_order:
                             #platform[order_index] = o
@@ -476,7 +482,7 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 1000):
+    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -485,9 +491,10 @@ class Customer(object):
         self.store_loc = store_loc
         self.store = store
         self.type = 'single_order'
-        self.fee = fee
+        self.fee = fee + 150*Basic.distance(input_location, store_loc)
         self.ready_time = None #가게에서 음식이 조리 완료된 시점
         self.who_serve = []
+        self.distance = Basic.distance(input_location, store_loc)
 
 class Platform_pool(object):
     def __init__(self):
