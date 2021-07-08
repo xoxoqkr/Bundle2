@@ -9,6 +9,8 @@ import math
 import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 import pandas as pd
+import gurobipy as gp
+from gurobipy import GRB
 
 
 class Order(object):
@@ -128,6 +130,87 @@ class StepwiseSearch(object):
             self.nets[info[0]] += info[1]
         self.ratio.append(len(res_1s)/len(self.nets))
 
+def ReviseCoeff_MJ(init_coeff, now_data, past_data, error = 10, print_para = False):
+    coeff = list(range(len(init_coeff)))
+    # D.V. and model set.
+    m = gp.Model("mip1")
+    x = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="x")
+    z = m.addVars(1 + len(past_data), vtype = GRB.CONTINUOUS, name= "z")
+    a = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="a")
+    u = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="a")
+
+    #m.setObjective(gp.quicksum(x[i] for i in coeff), GRB.MINIMIZE)
+    m.setObjective(gp.quicksum(u[i] for i in coeff), GRB.MINIMIZE)
+    m.addConstrs(x[i] <= u[i] for i in coeff)
+    m.addConstrs(-x[i] <= u[i] for i in coeff)
+
+
+    #m.setObjective(gp.quicksum(a[i] for i in coeff), GRB.MINIMIZE)
+    #m.addConstrs(a[i] == gp.abs_(x[i]) for i in coeff)
+    z_count = 0
+    #이번 selected와 other에 대한 문제 풀이
+    if print_para == True:
+        print('선택 고객 z {} '.format(numpy.dot(init_coeff, now_data[0])))
+    m.addConstr(gp.quicksum((x[i] + init_coeff[i])*now_data[0][i] for i in coeff) == z[z_count])
+    #m.addConstr(z[z_count] >= 0)
+    for other_info in now_data[1:]:
+        if print_para == True:
+            print('현재 데이터 제약식 {} : {}'.format(init_coeff, other_info))
+            print('현재 데이터 고객 z {} '.format(numpy.dot(init_coeff, other_info)))
+        m.addConstr(gp.quicksum((x[i] + init_coeff[i])*other_info[i] for i in coeff) <= z[z_count] - error)
+    z_count += 1
+    #과거 정보를 적층하는 작업
+    if len(past_data) > 0:
+        for data in past_data:
+            p_selected = data[0]
+            p_others = data[1:]
+            m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_selected[i] for i in coeff) == z[z_count])
+            for p_other_info in p_others:
+                if print_para == True:
+                    print('과거 {} 데이터 제약식 {} : {}'.format(z_count, init_coeff, p_other_info))
+                    print('과거 {}  데이터 고객 z {} '.format(z_count, numpy.dot(init_coeff, p_other_info)))
+                m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_other_info[i] for i in coeff) <= z[z_count] - error)
+            z_count += 1
+    #풀이
+    m.setParam(GRB.Param.OutputFlag, 0)
+    m.optimize()
+    try:
+        print('Obj val: %g' % m.objVal)
+        res = []
+        for val in m.getVars():
+            if val.VarName[0] == 'x':
+                res.append(float(val.x))
+        return True, res
+    except:
+        print('Infeasible')
+        return False, None
+
+class LP_search(object):
+    def __init__(self, name, func, init, T = 50):
+        self.name = name
+        self.func = func
+        self.init = init
+        self.past_data = []
+        self.true_coeff = None
+
+    def LP_Solver(self, org_data, customers):
+        data = [customers[org_data[0]].data_vector]
+        for name in org_data[1]:
+            data.append(customers[name].data_vector)
+        #input('초기 값 {} 입력 데이터 {}'.format(self.init, data))
+        feasiblity, res = ReviseCoeff_MJ(self.init, data, self.past_data, error = 0, print_para= False)
+        if feasiblity == True:
+            for index in range(len(res)):
+                self.init[index] += res[index]
+        else:
+            #input('해 없음'.format())
+            feasiblity2, res2 = ReviseCoeff_MJ(self.true_coeff, data, self.past_data, error=0)
+            #input('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))
+            print('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))
+        self.past_data.append(data)
+        #input('LP_Solver 확인'.format())
+
+
 def GrahDraw(engine, rider):
     vectors = []
     test = []
@@ -165,7 +248,7 @@ def GrahDraw(engine, rider):
 org_value = []
 exp_value = []
 dis_value = []
-for ITE_num in range(65, 100):
+for ITE_num in range(1):
     #1라이더 정의
     Riders = {}
     vector = [round(random.random(),2),-round(random.random(),2)]
@@ -174,14 +257,17 @@ for ITE_num in range(65, 100):
         Riders[name] = r
 
     #2Stepwise 시작 정의
-    ITE = 500
+    ITE = 100
     beta = 0.8
     init_nets = {}
     for i in numpy.arange(-1,1,0.4):
         for j in numpy.arange(-1,1,0.4):
             init_nets[i,j] = 0
     engine = StepwiseSearch(1, None, init_nets, 0.4)
-
+    init_vector = [round(random.random(),2),-round(random.random(),2)]
+    print('초기 값', init_vector)
+    LP_engine = LP_search(1, None, init_vector)
+    LP_engine.true_coeff = vector
 
     Orders = {}
     pool = list(numpy.arange(0, 10, 0.1))
@@ -206,9 +292,13 @@ for ITE_num in range(65, 100):
         for ob in observation:
             print('대상 데이터 {}'.format(ob))
             engine.Updater(ob, Orders, Riders[0])
+            LP_engine.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
+            print('실제값 {} -> 예측 값 {}'.format(Riders[0].coeff_vector, LP_engine.init))
         if engine.ite % engine.T == 0 and engine.ite > 0:
             engine.NetUpdater()
             #GrahDraw(engine, Riders[0])
+            #input('LP_search 결과 {} : 실제 {}'.format(LP_engine.init, Riders[0].coeff_vector))
+            print('LP_search 결과 {} : 실제 {}: 시작 값 {}'.format(LP_engine.init, Riders[0].coeff_vector, init_vector))
         engine.ite += 1
         print('ITE {} 종료'.format(t))
     try:
@@ -254,9 +344,9 @@ for ITE_num in range(65, 100):
     #kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data)
     kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
     print('목표 {}'.format(Riders[0].coeff_vector))
-    print('결과 {}'.format(kmeans.cluster_centers_[0]))
-
-
+    print('결과 StepWise{}'.format(kmeans.cluster_centers_[0]))
+    print('결과 LP {}'.format(LP_engine.init))
+    input('결과 확인')
     rev_z = numpy.array(rev_z)
     alphas = numpy.array(rev_z)
     #색깔 농도 관련 -> https://stackoverflow.com/questions/24767355/individual-alpha-values-in-scatter-plot
