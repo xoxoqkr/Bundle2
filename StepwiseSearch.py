@@ -158,139 +158,153 @@ def GrahDraw(engine, rider):
     plt.xlabel(' c1', labelpad=10)
     plt.ylabel(' c2', labelpad=10)
     plt.title('ITE {} :: Target Value -> c1:{} c2:{}'.format(engine.ite, rider.coeff_vector[0], rider.coeff_vector[1]))
-    plt.show()
-    input('Next -> ITE {}'.format(engine.ite))
+    plt.savefig('ITE {}.png'.format(engine.ite))
+    #plt.show()
+    #input('Next -> ITE {}'.format(engine.ite))
 ##실행부
+org_value = []
+exp_value = []
+dis_value = []
+for ITE_num in range(65, 100):
+    #1라이더 정의
+    Riders = {}
+    vector = [round(random.random(),2),-round(random.random(),2)]
+    for name in range(3):
+        r = Rider(name, vector)
+        Riders[name] = r
+
+    #2Stepwise 시작 정의
+    ITE = 500
+    beta = 0.8
+    init_nets = {}
+    for i in numpy.arange(-1,1,0.4):
+        for j in numpy.arange(-1,1,0.4):
+            init_nets[i,j] = 0
+    engine = StepwiseSearch(1, None, init_nets, 0.4)
 
 
-#1라이더 정의
-Riders = {}
-vector = [round(random.random(),2),-round(random.random(),2)]
-for name in range(3):
-    r = Rider(name, vector)
-    Riders[name] = r
+    Orders = {}
+    pool = list(numpy.arange(0, 10, 0.1))
+    for t in range(ITE):
+        observation = []
+        possible_customer_count = 0
+        for name in Orders:
+            if Orders[name].selected == False:
+                possible_customer_count += 1
+        if possible_customer_count < len(Riders) + 10:
+            name_start = len(Orders)
+            name_end = len(Orders) + 10
+            for name in range(name_start, name_end):
+                vector = random.sample(pool,2)
+                o = Order(name, vector)
+                Orders[name] = o
+        for rider_name in Riders:
+            rider = Riders[rider_name]
+            ob = rider.SelectOrder(Orders)
+            if ob[0] != None:
+                observation.append(ob)
+        for ob in observation:
+            print('대상 데이터 {}'.format(ob))
+            engine.Updater(ob, Orders, Riders[0])
+        if engine.ite % engine.T == 0 and engine.ite > 0:
+            engine.NetUpdater()
+            #GrahDraw(engine, Riders[0])
+        engine.ite += 1
+        print('ITE {} 종료'.format(t))
+    try:
+        print('라이더의 벡터 : {} 비율 : {}'.format(Riders[0].coeff_vector,Riders[0].coeff_vector[0]/Riders[0].coeff_vector[1]))
+    except:
+        pass
+    vectors = []
+    test = []
+    x = []
+    y = []
+    z = []
+    for net in engine.nets:
+        vectors.append([net, engine.nets[net]])
+        test.append(engine.nets[net])
+        x.append(net[0])
+        y.append(net[1])
+        z.append(engine.nets[net])
 
-#2Stepwise 시작 정의
-ITE = 500
-beta = 0.8
-init_nets = {}
-for i in numpy.arange(-1,1,0.4):
-    for j in numpy.arange(-1,1,0.4):
-        init_nets[i,j] = 0
-engine = StepwiseSearch(1, None, init_nets, 0.4)
+    rev_z = []
+    max_val = max(z)
+    for info in z:
+        rev_z.append(info/max_val)
+    vectors.sort(key= operator.itemgetter(1), reverse= True)
+    count = 1
+    for info in vectors[:20]:
+        #print('순위 : {}, 정보 {} 점수 {} 비율 {} '.format(count, info[0], info[1],info[0][0]/info[0][1]))
+        count += 1
 
+    vectors.sort(key= operator.itemgetter(1))
+    count = 1
+    for info in vectors[:20]:
+        #print('순위 : 하위 {}, 정보 {} 점수 {} 비율 {}'.format(count, info[0], info[1],info[0][0]/info[0][1]))
+        count += 1
+    print('평균 1 획득률 {}/ 평균 점수 {}'.format(sum(engine.ratio)/len(engine.ratio), sum(test)/len(test)))
 
-Orders = {}
-pool = list(numpy.arange(0, 10, 0.1))
-for t in range(ITE):
-    observation = []
-    possible_customer_count = 0
-    for name in Orders:
-        if Orders[name].selected == False:
-            possible_customer_count += 1
-    if possible_customer_count < len(Riders) + 10:
-        name_start = len(Orders)
-        name_end = len(Orders) + 10
-        for name in range(name_start, name_end):
-            vector = random.sample(pool,2)
-            o = Order(name, vector)
-            Orders[name] = o
-    for rider_name in Riders:
-        rider = Riders[rider_name]
-        ob = rider.SelectOrder(Orders)
-        if ob[0] != None:
-            observation.append(ob)
-    for ob in observation:
-        print('대상 데이터 {}'.format(ob))
-        engine.Updater(ob, Orders, Riders[0])
-    if engine.ite % engine.T == 0 and engine.ite > 0:
-        engine.NetUpdater()
-        GrahDraw(engine, Riders[0])
-    engine.ite += 1
-    print('ITE {} 종료'.format(t))
-
-print('라이더의 벡터 : {} 비율 : {}'.format(Riders[0].coeff_vector,Riders[0].coeff_vector[0]/Riders[0].coeff_vector[1]))
-vectors = []
-test = []
-x = []
-y = []
-z = []
-for net in engine.nets:
-    vectors.append([net, engine.nets[net]])
-    test.append(engine.nets[net])
-    x.append(net[0])
-    y.append(net[1])
-    z.append(engine.nets[net])
-
-rev_z = []
-max_val = max(z)
-for info in z:
-    rev_z.append(info/max_val)
-vectors.sort(key= operator.itemgetter(1), reverse= True)
-count = 1
-for info in vectors[:20]:
-    #print('순위 : {}, 정보 {} 점수 {} 비율 {} '.format(count, info[0], info[1],info[0][0]/info[0][1]))
-    count += 1
-
-vectors.sort(key= operator.itemgetter(1))
-count = 1
-for info in vectors[:20]:
-    #print('순위 : 하위 {}, 정보 {} 점수 {} 비율 {}'.format(count, info[0], info[1],info[0][0]/info[0][1]))
-    count += 1
-print('평균 1 획득률 {}/ 평균 점수 {}'.format(sum(engine.ratio)/len(engine.ratio), sum(test)/len(test)))
-
-#클러스터 탐색
-rev_data = []
-for index in range(len(x)):
-    #for _ in range(int(z[index])):
-    #    rev_data.append([x[index], y[index]])
-    rev_data.append([x[index], y[index]])
-rev_data = numpy.array(rev_data)
-#kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data)
-kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
-print('목표 {}'.format(Riders[0].coeff_vector))
-print('결과 {}'.format(kmeans.cluster_centers_[0]))
+    #클러스터 탐색
+    rev_data = []
+    for index in range(len(x)):
+        #for _ in range(int(z[index])):
+        #    rev_data.append([x[index], y[index]])
+        rev_data.append([x[index], y[index]])
+    rev_data = numpy.array(rev_data)
+    #kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data)
+    kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
+    print('목표 {}'.format(Riders[0].coeff_vector))
+    print('결과 {}'.format(kmeans.cluster_centers_[0]))
 
 
-rev_z = numpy.array(rev_z)
-alphas = numpy.array(rev_z)
-#색깔 농도 관련 -> https://stackoverflow.com/questions/24767355/individual-alpha-values-in-scatter-plot
-rgba_colors = numpy.zeros((len(x),4))
-# for red the first column needs to be one
-rgba_colors[:,0] = 1.0
-# the fourth column needs to be your alphas
-rgba_colors[:, 3] = alphas
-
-plt.scatter(x,y, color=rgba_colors, s = 5)
-plt.scatter(Riders[0].coeff_vector[0], Riders[0].coeff_vector[1], color = 'b', marker= "X", s = 20)
-cluster = [round(kmeans.cluster_centers_[0][0],4), round(kmeans.cluster_centers_[0][1],4)]
-plt.scatter(cluster[0], cluster[1], color = 'g', marker= "*", s = 20)
-#plt.scatter(x,y, label='sample', alpha=rev_z)
-plt.xlabel(' c1', labelpad= 10)
-plt.ylabel(' c2', labelpad= 10)
-plt.title('Target Value -> c1:{} c2:{}/Cluster {} {}'.format(Riders[0].coeff_vector[0],Riders[0].coeff_vector[1],cluster[0], cluster[1]))
-#todo : weighted linear regression 삽입.
-z = numpy.array(z)
-p1, p2 = numpy.polynomial.polynomial.polyfit(x, y, 1, w=z)
-def func(p1, p2, x):
-    return  p1 * x + p2
-x = numpy.array(x)
-plt.plot(x, func(p1, p2, x))
-"""
-plt.scatter(x, y)
-
-w = np.ones(x.shape[0])
-w[1] = 12
-# p1, p2 = np.polyfit(x, y, 1, w=w)
-p1, p2 = np.polynomial.polynomial.polyfit(x, y, 1, w=w)
-print(p1, p2, w)
-
-plt.plot(x, func(p1, p2, x))
-
-
-x = numpy.array(x)
-m, b = numpy.polyfit(x, y, 1)
-plt.plot(x, m*x + b)
-plt.show()
-"""
-plt.show()
+    rev_z = numpy.array(rev_z)
+    alphas = numpy.array(rev_z)
+    #색깔 농도 관련 -> https://stackoverflow.com/questions/24767355/individual-alpha-values-in-scatter-plot
+    rgba_colors = numpy.zeros((len(x),4))
+    # for red the first column needs to be one
+    rgba_colors[:,0] = 1.0
+    # the fourth column needs to be your alphas
+    rgba_colors[:, 3] = alphas
+    plt.scatter(x,y, color=rgba_colors, s = 5)
+    plt.scatter(Riders[0].coeff_vector[0], Riders[0].coeff_vector[1], color = 'b', marker= "X", s = 20)
+    cluster = [round(kmeans.cluster_centers_[0][0],4), round(kmeans.cluster_centers_[0][1],4)]
+    plt.scatter(cluster[0], cluster[1], color = 'g', marker= "*", s = 20)
+    #plt.scatter(x,y, label='sample', alpha=rev_z)
+    plt.xlabel(' c1', labelpad= 10)
+    plt.ylabel(' c2', labelpad= 10)
+    plt.title('Target Value -> c1:{} c2:{}/Cluster {} {}'.format(Riders[0].coeff_vector[0],Riders[0].coeff_vector[1],cluster[0], cluster[1]))
+    #todo : weighted linear regression 삽입.
+    z = numpy.array(z)
+    p1, p2 = numpy.polynomial.polynomial.polyfit(x, y, 1, w=z)
+    def func(p1, p2, x):
+        return  p1 * x + p2
+    x = numpy.array(x)
+    plt.plot(x, func(p1, p2, x))
+    """
+    plt.scatter(x, y)
+    
+    w = np.ones(x.shape[0])
+    w[1] = 12
+    # p1, p2 = np.polyfit(x, y, 1, w=w)
+    p1, p2 = np.polynomial.polynomial.polyfit(x, y, 1, w=w)
+    print(p1, p2, w)
+    
+    plt.plot(x, func(p1, p2, x))
+    
+    
+    x = numpy.array(x)
+    m, b = numpy.polyfit(x, y, 1)
+    plt.plot(x, m*x + b)
+    plt.show()
+    """
+    #plt.show()
+    plt.savefig('ITE{}.png'.format(ITE_num))
+    plt.clf()  # Clear figure
+    org_value.append(Riders[0].coeff_vector)
+    exp_value.append(cluster)
+    res_dist = round(math.sqrt((Riders[0].coeff_vector[0] - cluster[0])**2 + (Riders[0].coeff_vector[1] - cluster[1])**2),4)
+    dis_value.append(res_dist)
+    f = open("StepWise.txt", 'a')
+    info = '{};{};{};{};{};{} {}'.format(ITE_num,Riders[0].coeff_vector[0],Riders[0].coeff_vector[1],cluster[0],cluster[1],res_dist,'\n')
+    f.write(info)
+    f.close()
