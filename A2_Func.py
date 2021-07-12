@@ -5,7 +5,7 @@ from A1_BasicFunc import RouteTime, distance, FLT_Calculate
 from A1_Class import Order
 import time
 import matplotlib.pyplot as plt
-
+import numpy as np
 
 def CustomerValueForRiderCalculator(rider, customer):
     """
@@ -242,19 +242,45 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
         #그래프 그리기
         x = []
         y = []
+        x1 = []
+        x2 = []
+        y1 = []
+        y2 = []
+        store_label = []
+        loc_label = []
         for node in feasible_subset[0][0]:
             if node > M:
                 name = node - M
                 x.append(customers[name].store_loc[0])
                 y.append(customers[name].store_loc[1])
+                x1.append(customers[name].store_loc[0])
+                y1.append(customers[name].store_loc[1])
+                store_label.append('S' + str(name))
             else:
                 x.append(customers[node].location[0])
                 y.append(customers[node].location[1])
-        plt.plot(x, y, linestyle='solid', color='blue')
-        plt.title("Connected Scatterplot points with line")
+                x2.append(customers[node].location[0])
+                y2.append(customers[node].location[1])
+                loc_label.append('C' + str(node))
+        #plt.plot(x, y, linestyle='solid', color='blue', marker = 6)
+        x3 = np.array(x)
+        y3 = np.array(y)
+        plt.quiver(x3[:-1], y3[:-1], x3[1:] - x3[:-1], y3[1:] - y3[:-1], scale_units='xy', angles='xy', scale=1)
+        plt.scatter(x1, y1, marker="X", color='g')
+        plt.scatter(x2, y2, marker="o", color='r')
+        plt.title("Bundle coordinate")
         plt.xlabel("x")
-        plt.ylabel("sinx")
-        plt.show()
+        plt.ylabel("y")
+        plt.xlim(0, 50)
+        plt.ylim(0, 50)
+        #plt.show()
+        #name = str(random.random)
+        tm = time.localtime(time.time())
+        #print("hour:", tm.tm_hour)
+        #print("minute:", tm.tm_min)
+        #print("second:", tm.tm_sec)
+        plt.savefig('B{}Hr{}Min{}Sec{}.png'.format(len(feasible_subset[0][4]),tm.tm_hour,tm.tm_min,tm.tm_sec))
+        plt.close()
         input('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(feasible_subset[0][5], time_thres))
         return feasible_subset[0]
     else:

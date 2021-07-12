@@ -11,6 +11,13 @@ from sklearn.cluster import KMeans
 import pandas as pd
 import gurobipy as gp
 from gurobipy import GRB
+from docplex.mp.model import Model
+#from docplex.mp.constr import *
+from docplex.mp.constr import (LinearConstraint as DocplexLinearConstraint,
+                               QuadraticConstraint as DocplexQuadraticConstraint,
+                               NotEqualConstraint, IfThenConstraint)
+
+
 
 
 class Order(object):
@@ -29,7 +36,10 @@ class Rider(object):
         for order_name in orders:
             order = orders[order_name]
             if order.selected == False:
-                score = (numpy.dot(self.coeff_vector,order.data_vector),2)
+                #score = (numpy.dot(self.coeff_vector,order.data_vector),2)
+                score = 0
+                for index in range(len(self.coeff_vector)):
+                    score += self.coeff_vector[index]*order.data_vector[index]
                 scores.append([order_name, score])
         scores.sort(key=operator.itemgetter(1), reverse = True)
         if len(scores) > 0:
@@ -91,7 +101,11 @@ class StepwiseSearch(object):
         scores = []
         for order_name in [data[0]] + data[1]:
             order = orders[order_name]
-            scores.append([order_name, numpy.dot(ele, order.data_vector)]) #todo: 가치함수의 형태가 달라지면, 달라져야 함.
+            score = 0
+            for index in range(len(ele)):
+                score += ele[index] * order.data_vector[index]
+            scores.append([order_name, score])
+            #scores.append([order_name, numpy.dot(ele, order.data_vector)]) #todo: 가치함수의 형태가 달라지면, 달라져야 함.
         scores.sort(key=operator.itemgetter(1), reverse = True)
         return scores[0][0]
 
@@ -130,50 +144,130 @@ class StepwiseSearch(object):
             self.nets[info[0]] += info[1]
         self.ratio.append(len(res_1s)/len(self.nets))
 
-def ReviseCoeff_MJ(init_coeff, now_data, past_data, error = 10, print_para = False):
+def Coeff_Check(coeff, datas):
+    count1 = 0
+    for data in datas:
+        val = numpy.dot(coeff, data[0])
+        count2 = 0
+        for info in data[1:]:
+            val2 = numpy.dot(coeff, info)
+            if val >= val2:
+                #print('{}-{} Z : {} >= {} : 대상'.format(count1, count2, val, val2))
+                pass
+            else:
+                input('에러 발생 : 데이터 {} : 회차 {} : 선택된 주문 가치 {} < 다른 주문 {} '.format(count1, count2,val, val2))
+            count2 += 1
+        count1 += 1
+
+
+def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_para = False):
     coeff = list(range(len(init_coeff)))
     # D.V. and model set.
-    m = gp.Model("mip1")
+    md1 = Model('IP_model')
+    x = md1.continuous_var_list(len(coeff),name = 'x')
+    #z = md1.continuous_var_list(1 + len(past_data),name = 'v')
+    #a = md1.continuous_var_list(len(coeff) ,name = 'a')
+    u = md1.continuous_var_list(len(coeff), name = 'u')
+
+    #Define Obj
+    md1.minimize(md1.sum(u[i] for i in coeff))
+
+    #Add Constrsints
+    md1.add_constraints( x[i] <= u[i] for i in coeff)
+    md1.add_constraints(-x[i] <= u[i] for i in coeff)
+    for other_info in now_data[1:]:
+        md1.add_constraint((x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1] - error >= (
+                    x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
+    if len(past_data) > 0:
+        for data in past_data:
+            p_selected = data[0]
+            p_others = data[1:]
+            for p_other_info in p_others:
+                md1.add_constraint((x[0] + init_coeff[0]) * p_selected[0] + (x[1] + init_coeff[1]) * p_selected[1] - error >= (
+                            x[0] + init_coeff[0]) * p_other_info[0] + (x[1] + init_coeff[1]) *
+                            p_other_info[1])
+    msol = md1.solve()
+    print(msol)
+    input('CPLEX 확인')
+    return None, msol
+
+def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_para = False):
+    coeff = list(range(len(init_coeff)))
+    # D.V. and model set.
+    m = gp.Model("problem1")
     x = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="x")
-    z = m.addVars(1 + len(past_data), vtype = GRB.CONTINUOUS, name= "z")
+    #z = m.addVars(1 + len(past_data), vtype = GRB.CONTINUOUS, name= "z")
     a = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="a")
-    u = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="a")
+    u = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="u")
 
     #m.setObjective(gp.quicksum(x[i] for i in coeff), GRB.MINIMIZE)
-    m.setObjective(gp.quicksum(u[i] for i in coeff), GRB.MINIMIZE)
+    #m.setObjective(gp.quicksum(u[i] for i in coeff), GRB.MINIMIZE)
+    m.setObjective(u[0] + u[1], GRB.MINIMIZE)
     m.addConstrs(x[i] <= u[i] for i in coeff)
     m.addConstrs(-x[i] <= u[i] for i in coeff)
 
 
     #m.setObjective(gp.quicksum(a[i] for i in coeff), GRB.MINIMIZE)
+    #m.setObjective(a[0] + a[1], GRB.MINIMIZE)
     #m.addConstrs(a[i] == gp.abs_(x[i]) for i in coeff)
+    #m.setObjective(x[0]^2 + x[1]^2, GRB.MINIMIZE)
     z_count = 0
     #이번 selected와 other에 대한 문제 풀이
     if print_para == True:
         print('선택 고객 z {} '.format(numpy.dot(init_coeff, now_data[0])))
-    m.addConstr(gp.quicksum((x[i] + init_coeff[i])*now_data[0][i] for i in coeff) == z[z_count])
+    #m.addConstr(gp.quicksum((x[i] + init_coeff[i])*now_data[0][i] for i in coeff) == z[z_count])
+
+    #m.addConstr(z[z_count] - error == (x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1])
     #m.addConstr(z[z_count] >= 0)
+    z_val = numpy.dot(now_data[0], init_coeff)
+    index2 = 0
     for other_info in now_data[1:]:
+        compare_val = numpy.dot(other_info, init_coeff)
         if print_para == True:
             print('현재 데이터 제약식 {} : {}'.format(init_coeff, other_info))
             print('현재 데이터 고객 z {} '.format(numpy.dot(init_coeff, other_info)))
-        m.addConstr(gp.quicksum((x[i] + init_coeff[i])*other_info[i] for i in coeff) <= z[z_count] - error)
+            print('비교 결과 Z : {} < {} : Val'.format(z_val, compare_val))
+            if z_val < compare_val:
+                print('Current {}-{} 비교 결과 Z : {} < {} : Val'.format(z_count, index2,  z_val, compare_val))
+            else:
+                print('Current {}-{} 비교 결과 Z : {} > {} : Val'.format(z_count, index2, z_val, compare_val))
+            pass
+        #m.addConstr(gp.quicksum((x[i] + init_coeff[i])*other_info[i] for i in coeff) <= z[z_count] - error)
+        #m.addConstr( z[z_count] - error >= (x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
+        m.addConstr( (x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1] - error >= (x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
+        index2 += 1
     z_count += 1
     #과거 정보를 적층하는 작업
     if len(past_data) > 0:
         for data in past_data:
+            z_val = numpy.dot(init_coeff, data[0])
             p_selected = data[0]
             p_others = data[1:]
-            m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_selected[i] for i in coeff) == z[z_count])
+            #m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_selected[i] for i in coeff) == z[z_count])
+            #m.addConstr(z[z_count] - error == (x[0] + init_coeff[0]) * p_selected[0] + (x[1] + init_coeff[1]) * p_selected[1])
+            index2 = 0
             for p_other_info in p_others:
+                compare_val = numpy.dot(p_other_info, init_coeff)
                 if print_para == True:
-                    print('과거 {} 데이터 제약식 {} : {}'.format(z_count, init_coeff, p_other_info))
-                    print('과거 {}  데이터 고객 z {} '.format(z_count, numpy.dot(init_coeff, p_other_info)))
-                m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_other_info[i] for i in coeff) <= z[z_count] - error)
+                    #print('과거 {} 데이터 제약식 {} : {}'.format(z_count, init_coeff, p_other_info))
+                    #print('과거 {}  데이터 고객 z {} '.format(z_count, numpy.dot(init_coeff, p_other_info)))
+                    #print('Past 비교 결과 Z : {} < {} : Val'.format(z_val, compare_val))
+                    if z_val < compare_val:
+                        print('Past {}-{} 비교 결과 Z : {} < {} : Val'.format(z_count, index2,  z_val, compare_val))
+                    else:
+                        print('Past {}-{} 비교 결과 Z : {} > {} : Val'.format(z_count, index2, z_val, compare_val))
+                    pass
+                #m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_other_info[i] for i in coeff) <= z[z_count] - error)
+                #m.addConstr(z[z_count] - error >= (x[0] + init_coeff[0]) * p_other_info[0] + (x[1] + init_coeff[1]) * p_other_info[1])
+                m.addConstr((x[0] + init_coeff[0]) * p_selected[0] + (x[1] + init_coeff[1]) * p_selected[1] - error >= (x[0] + init_coeff[0]) * p_other_info[0] + (x[1] + init_coeff[1]) *
+                            p_other_info[1])
+                index2 += 1
             z_count += 1
     #풀이
     m.setParam(GRB.Param.OutputFlag, 0)
+    m.Params.method = -1
     m.optimize()
+
     try:
         print('Obj val: %g' % m.objVal)
         res = []
@@ -192,21 +286,29 @@ class LP_search(object):
         self.init = init
         self.past_data = []
         self.true_coeff = None
+        self.path = []
 
     def LP_Solver(self, org_data, customers):
         data = [customers[org_data[0]].data_vector]
         for name in org_data[1]:
             data.append(customers[name].data_vector)
         #input('초기 값 {} 입력 데이터 {}'.format(self.init, data))
-        feasiblity, res = ReviseCoeff_MJ(self.init, data, self.past_data, error = 0, print_para= False)
+        #feasiblity, res = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
+        feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
         if feasiblity == True:
             for index in range(len(res)):
                 self.init[index] += res[index]
+            if sum(res) != 0:
+                self.path.append(res)
         else:
             #input('해 없음'.format())
-            feasiblity2, res2 = ReviseCoeff_MJ(self.true_coeff, data, self.past_data, error=0)
+            #print('확인용 계산: 라이더의 Coeff {} : 오라클의 Coeff {}'.format())
+            feasiblity2, res2 = ReviseCoeff_MJByGurobi(self.true_coeff, data, self.past_data, error= 0, print_para= False)
             #input('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))
             print('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))
+            if feasiblity2 == False:
+                Coeff_Check(self.true_coeff, [data] + self.past_data)
+                input('확인용 계산에도 에러 발생')
         self.past_data.append(data)
         #input('LP_Solver 확인'.format())
 
@@ -242,6 +344,7 @@ def GrahDraw(engine, rider):
     plt.ylabel(' c2', labelpad=10)
     plt.title('ITE {} :: Target Value -> c1:{} c2:{}'.format(engine.ite, rider.coeff_vector[0], rider.coeff_vector[1]))
     plt.savefig('ITE {}.png'.format(engine.ite))
+    plt.close()
     #plt.show()
     #input('Next -> ITE {}'.format(engine.ite))
 ##실행부
@@ -255,7 +358,7 @@ for ITE_num in range(1):
     for name in range(3):
         r = Rider(name, vector)
         Riders[name] = r
-
+    print('라이더 벡터 {}'.format(Riders[0].coeff_vector))
     #2Stepwise 시작 정의
     ITE = 100
     beta = 0.8
@@ -264,11 +367,12 @@ for ITE_num in range(1):
         for j in numpy.arange(-1,1,0.4):
             init_nets[i,j] = 0
     engine = StepwiseSearch(1, None, init_nets, 0.4)
-    init_vector = [round(random.random(),2),-round(random.random(),2)]
+    #init_vector = [round(random.random(),2),-round(random.random(),2)]
+    init_vector = [0.5,0.5]
     print('초기 값', init_vector)
     LP_engine = LP_search(1, None, init_vector)
     LP_engine.true_coeff = vector
-
+    print('LP_engine 벡터 {}'.format(LP_engine.true_coeff))
     Orders = {}
     pool = list(numpy.arange(0, 10, 0.1))
     for t in range(ITE):
@@ -293,10 +397,12 @@ for ITE_num in range(1):
             print('대상 데이터 {}'.format(ob))
             engine.Updater(ob, Orders, Riders[0])
             LP_engine.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
+            #Coeff_Check(Riders[0].coeff_vector, LP_engine.past_data)
+            print('확인용 계산: 라이더의 Coeff {} : 오라클의 Coeff {}'.format(Riders[0].coeff_vector, LP_engine.true_coeff ))
             print('실제값 {} -> 예측 값 {}'.format(Riders[0].coeff_vector, LP_engine.init))
         if engine.ite % engine.T == 0 and engine.ite > 0:
             engine.NetUpdater()
-            #GrahDraw(engine, Riders[0])
+            GrahDraw(engine, Riders[0])
             #input('LP_search 결과 {} : 실제 {}'.format(LP_engine.init, Riders[0].coeff_vector))
             print('LP_search 결과 {} : 실제 {}: 시작 값 {}'.format(LP_engine.init, Riders[0].coeff_vector, init_vector))
         engine.ite += 1
@@ -345,7 +451,7 @@ for ITE_num in range(1):
     kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
     print('목표 {}'.format(Riders[0].coeff_vector))
     print('결과 StepWise{}'.format(kmeans.cluster_centers_[0]))
-    print('결과 LP {}'.format(LP_engine.init))
+    print('결과 LP {}, LP 변화 경로{}'.format(LP_engine.init, LP_engine.path))
     input('결과 확인')
     rev_z = numpy.array(rev_z)
     alphas = numpy.array(rev_z)
