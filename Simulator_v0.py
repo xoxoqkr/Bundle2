@@ -10,7 +10,7 @@ import operator
 #Parameter define
 order_interval = 1.3
 interval = 5
-p2 = 15
+p2 = 20 #주의할 것.
 thres_p = 1
 run_time = 100
 rider_working_time = 120
@@ -19,9 +19,9 @@ store_num = 20
 rider_num = 1
 rider_gen_interval = 1
 rider_speed = 4
-rider_capacity = 4
+rider_capacity = 1
 ITE_NUM = 1
-option_para = False #True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
+option_para = True #True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
 customer_max_range = 50
 store_max_range = 30
 
@@ -39,7 +39,7 @@ f.write('결과저장 시작' + '\n')
 f.close()
 
 #infos = [['A',False, False],['B',True, True],['C',True, False]]
-infos = [['B',True, False]]
+infos = [['A',False, False],['B',True, True],['C',True, False]]
 for info in infos:
     sc = scenario(info[0], info[1], info[2])
     scenarios.append(sc)
@@ -55,9 +55,9 @@ for ite in range(ITE_NUM):
         store_history.append(list(random.sample(range(20 , store_max_range), 2)))
     for sc in scenarios:
         if sc.name == 'A':
-            rider_capacity = 1
+            rider_capacity = 2
         else:
-            rider_capacity = 5
+            rider_capacity = 1
         Rider_dict = {}
         Orders = {}
         Platform2 = Platform_pool()
@@ -71,7 +71,7 @@ for ite in range(ITE_NUM):
         env.process(RiderGenerator(env, Rider_dict, Platform2, Store_dict, Orders, speed=rider_speed,
                                    interval=rider_gen_interval, runtime=run_time, gen_num=rider_num,
                                    capacity=rider_capacity, history= rider_history))
-        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime=run_time))
+        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime=run_time, p2 = p2))
         if sc.platform_work == True:
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para))

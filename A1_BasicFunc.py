@@ -80,11 +80,13 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     #input('체크1 {} 체크2 {}'.format(customer_in_order,customers))
     for order_name in names:
         if order_name not in except_names:
-            rev_p2 = p2
+            #rev_p2 = p2
+            rev_p2 = customers[order_name].min_FLT
             if customers[order_name].time_info[2] != None:
                 #print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
                 last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
-                rev_p2 = p2 - last_time
+                #rev_p2 = p2 - last_time
+                rev_p2 = customers[order_name].min_FLT - last_time
             try:
                 s = route.index(order_name + M)
                 e = route.index(order_name)
@@ -139,7 +141,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 
-def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None):
+def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15):
     """
     Generate customer order
     :param env: Simpy Env
@@ -160,7 +162,7 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
             input_location = history[name][2]
             store_num = history[name][1]
             interval = history[name + 1][0] - history[name][0]
-        order = Class.Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location)
+        order = Class.Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location, p2 = p2)
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         yield env.timeout(interval)

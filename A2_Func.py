@@ -205,12 +205,19 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
         store_subset = list(store_subset)
         order_subset = itertools.permutations(order_names, len(order_names))
         order_subset = list(order_subset)
+        test = []
+        test_names = itertools.permutations(order_names, 2)
+        for names in test_names:
+            dist = distance(customers[names[0]].location, customers[names[1]].location)
+            if dist > 15:
+                return []
         subset = []
         for store in store_subset:
             for order in order_subset:
                 tem = store + order
                 subset.append(tem)
         pass
+    #print('번들 처리 시작. 대상 subset{}'.format(subset))
     #print('번들 고려시 탐색 수 {}'.format(len(list(subset))))
     feasible_subset = []
     for route in subset:
@@ -239,52 +246,60 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
             feasible_subset.append(feasible_routes[0])
     if len(feasible_subset) > 0:
         feasible_subset.sort(key = operator.itemgetter(2))
-        #그래프 그리기
-        x = []
-        y = []
-        x1 = []
-        x2 = []
-        y1 = []
-        y2 = []
-        store_label = []
-        loc_label = []
-        for node in feasible_subset[0][0]:
-            if node > M:
-                name = node - M
-                x.append(customers[name].store_loc[0])
-                y.append(customers[name].store_loc[1])
-                x1.append(customers[name].store_loc[0])
-                y1.append(customers[name].store_loc[1])
-                store_label.append('S' + str(name))
-            else:
-                x.append(customers[node].location[0])
-                y.append(customers[node].location[1])
-                x2.append(customers[node].location[0])
-                y2.append(customers[node].location[1])
-                loc_label.append('C' + str(node))
-        #plt.plot(x, y, linestyle='solid', color='blue', marker = 6)
-        x3 = np.array(x)
-        y3 = np.array(y)
-        plt.quiver(x3[:-1], y3[:-1], x3[1:] - x3[:-1], y3[1:] - y3[:-1], scale_units='xy', angles='xy', scale=1)
-        plt.scatter(x1, y1, marker="X", color='g')
-        plt.scatter(x2, y2, marker="o", color='r')
-        plt.title("Bundle coordinate")
-        plt.xlabel("x")
-        plt.ylabel("y")
-        plt.xlim(0, 50)
-        plt.ylim(0, 50)
-        #plt.show()
-        #name = str(random.random)
-        tm = time.localtime(time.time())
-        #print("hour:", tm.tm_hour)
-        #print("minute:", tm.tm_min)
-        #print("second:", tm.tm_sec)
-        plt.savefig('B{}Hr{}Min{}Sec{}.png'.format(len(feasible_subset[0][4]),tm.tm_hour,tm.tm_min,tm.tm_sec))
-        plt.close()
-        input('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(feasible_subset[0][5], time_thres))
+        #GraphDraw(feasible_subset[0], customers)
         return feasible_subset[0]
     else:
         return []
+
+
+def GraphDraw(infos, customers, M = 1000):
+    # 그래프 그리기
+    x = []
+    y = []
+    x1 = []
+    x2 = []
+    y1 = []
+    y2 = []
+    store_label = []
+    loc_label = []
+    locs = []
+    for node in infos[0]:
+        if node > M:
+            name = node - M
+            x.append(customers[name].store_loc[0])
+            y.append(customers[name].store_loc[1])
+            x1.append(customers[name].store_loc[0])
+            y1.append(customers[name].store_loc[1])
+            store_label.append('S' + str(name))
+            locs.append(customers[name].store_loc)
+        else:
+            x.append(customers[node].location[0])
+            y.append(customers[node].location[1])
+            x2.append(customers[node].location[0])
+            y2.append(customers[node].location[1])
+            loc_label.append('C' + str(node))
+            locs.append(customers[name].location)
+    # plt.plot(x, y, linestyle='solid', color='blue', marker = 6)
+    x3 = np.array(x)
+    y3 = np.array(y)
+    plt.quiver(x3[:-1], y3[:-1], x3[1:] - x3[:-1], y3[1:] - y3[:-1], scale_units='xy', angles='xy', scale=1)
+    plt.scatter(x1, y1, marker="X", color='g')
+    plt.scatter(x2, y2, marker="o", color='r')
+    plt.title("Bundle coordinate")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.xlim(0, 50)
+    plt.ylim(0, 50)
+    plt.show()
+    # name = str(random.random)
+    tm = time.localtime(time.time())
+    # print("hour:", tm.tm_hour)
+    # print("minute:", tm.tm_min)
+    # print("second:", tm.tm_sec)
+    plt.savefig('B{}Hr{}Min{}Sec{}.png'.format(len(infos[4]), tm.tm_hour, tm.tm_min, tm.tm_sec))
+    plt.close()
+    print('경로 {}'.format(locs))
+    #input('번들 경로 {} 시간 {}'.format(infos[0],infos[5]))
 
 
 
@@ -310,7 +325,8 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False):
             dist = distance(order.store_loc, order2.store_loc)/speed
             if order2 != order and dist <= dist_thres:
                 d.append(order2.name)
-        M = itertools.combinations(d,s-1)
+        #M = itertools.combinations(d,s-1)
+        M = itertools.permutations(d, s - 1)
         #print('번들 구성 고려 subset 수 {}'.format(len(list(M))))
         #M = list(M)
         b = []
@@ -327,6 +343,7 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False):
         if len(b) > 0:
             b.sort(key = operator.itemgetter(2))
             B.append(b[0])
+            #input('삽입되는 {}'.format(b[0]))
     #n개의 번들 선택
     B.sort(key = operator.itemgetter(5))
     selected_bundles = []
@@ -435,7 +452,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
                     route.append([customer_name, 1, customer.location, 0])
             fee = 0
             for customer_name in info[4]:
-                fee += customer_set[customer_name].fee
+                fee += customer_set[customer_name].fee #주문의 금액 더하기.
             o = Order(order_index, info[4], route, 'bundle', fee = fee)
         o.average_ftd = info[2]
         res[order_index] = o

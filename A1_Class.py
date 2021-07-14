@@ -22,7 +22,7 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple'):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
@@ -44,7 +44,7 @@ class Rider(object):
         self.idle_time = 0
         self.candidates = []
         self.b_select = 0
-        env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom))
+        env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type))
 
 
     def RiderMoving(self, env, time):
@@ -57,7 +57,7 @@ class Rider(object):
         #print('현재1 T:{} 라이더{} 가게 {} 도착'.format(int(env.now),self.name, info ))
 
 
-    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2, freedom = True):
+    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2, freedom = True, order_select_type = 'simple'):
         """
         라이더의 행동 과정을 정의.
         1)주문 선택
@@ -113,6 +113,7 @@ class Rider(object):
                     self.last_departure_loc = self.route[0][2]
                     self.visited_route.append(self.route[0])
                     self.visited_route[-1][3] = int(env.now)
+                    #input('현재 경로 {} 제거 대상 {}'.format(self.route, self.route[0]))
                     del self.route[0]
                     print('남은 경로 {}'.format(self.route))
             freedom_para = True #todo : 라이더의 임의 주문 선택을 방지.
@@ -131,18 +132,24 @@ class Rider(object):
                         uppicked_order_num += 1
                 print('플랫폼의 주문 수 {}/ 대기 중인 주문 수 {}'.format(len(platform.platform),uppicked_order_num))
                 self.candidates.append(len(platform.platform))
-                order_info = self.OrderSelect(platform, customers, p2 = p2)
+                order_info = self.OrderSelect(platform, customers, p2 = p2, score_type= order_select_type) #todo : 라이더의 선택 과정
                 #t2 = time.time()
                 #elapsed_time = t2 - t1
                 #print(f"처리시간：{elapsed_time}")
                 #print('계산 종료 {} '.format(env.now))
                 if order_info != None:
                     #input('체크')
+                    #input('T {} 라이더 {} 주문 {} 선택 : 주문 고객 {}'.format(int(env.now),self.name, order_info[0], order_info[1]))
                     added_order = platform.platform[order_info[0]]
-                    print('대상 주문들 선택 여부:: 인덱스 {} 고객들{} 선택여부{}'.format(added_order.index, added_order.customers,
-                                                                      added_order.picked))
-                    print('T: {}/ 라이더 {}/ 주문 {} 선택 / 고객들 {}'.format(int(env.now), self.name, added_order.index, added_order.customers))
-                    print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
+                    if len(added_order.customers) > 1:
+                        #input('라이더 {} 번들 {} 선택'.format(self.name, added_order.route))
+                        pass
+                    else:
+                        #input('라이더 {} 주문 {} 선택'.format(self.name, added_order.route))
+                        pass
+                    #print('대상 주문들 선택 여부:: 인덱스 {} 고객들{} 선택여부{}'.format(added_order.index, added_order.customers,added_order.picked))
+                    #print('T: {}/ 라이더 {}/ 주문 {} 선택 / 고객들 {}'.format(int(env.now), self.name, added_order.index, added_order.customers))
+                    #print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
                     self.OrderPick(added_order, order_info[1], customers, env.now)
                     if len(added_order.route) > 2:
                         self.b_select += 1
@@ -155,7 +162,7 @@ class Rider(object):
                         print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - wait_time, int(env.now)))
 
 
-    def OrderSelect(self, platform, customers, p2 = 0, sort_standard = 7):
+    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7):
         """
         라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
         1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
@@ -175,32 +182,51 @@ class Rider(object):
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
             #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
-            if order.picked == False and (len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num):
-                if type(order.route[0]) != list:
-                    input('에러 확인 {} : {}'.format(self.last_departure_loc,order.route))
-                dist = Basic.distance(self.last_departure_loc, order.route[0][2])/self.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
-                info = [order.index,dist]
-                bound_order_names.append(info)
+            if order.picked == False:
+                if ((len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num)) or (len(order.route) > 2 and len(self.onhand) < 3):
+                    if type(order.route[0]) != list:
+                        input('에러 확인 {} : {}'.format(self.last_departure_loc,order.route))
+                    dist = Basic.distance(self.last_departure_loc, order.route[0][2])/self.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
+                    info = [order.index,dist]
+                    bound_order_names.append(info)
+                #elif len(order.route) > 2: #번들이라는 소리
+                #    dist = Basic.distance(self.last_departure_loc, order.route[0][2]) / self.speed
+                #    info = [order.index, dist]
+                #    bound_order_names.append(info)
             bound_order_names.sort(key = operator.itemgetter(1))
         if len(bound_order_names) > 0:
             for info in bound_order_names[:self.bound]: #todo : route의 시작 위치와 자신의 위치사이의 거리가 가까운 bound개의 주문 중 선택.
                 order = platform.platform[info[0]]
-                route_info = self.ShortestRoute(order, customers, p2=p2)
-                #print('계산 종료 {} '.format(len(route_info)))
-                if len(route_info) > 0:
-                    benefit = order.fee/route_info[5] #이익 / 운행 시간
-                    score.append([order.index] + route_info + [benefit])
-                    if len(order.customers) > 1:
-                        score[-1][7] = 3 - len(order.customers) #todo: 번들이 선택 될 수 있도록 incentive 필요?
+                if score_type == 'oracle':
+                    route_info = self.ShortestRoute(order, customers, p2=p2)
+                    #route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
+                    if len(route_info) > 0:
+                        benefit = order.fee / route_info[5]  # 이익 / 운행 시간
+                        score.append([order.index] + route_info + [benefit])
+                elif score_type == 'simple':
+                    mv_time = 0
+                    times = []
+                    rev_route = [self.last_departure_loc]
+                    for route_info in order.route:
+                        rev_route.append(route_info[2])
+                    for node_index in range(1,len(rev_route)):
+                        mv_time += Basic.distance(rev_route[node_index - 1],rev_route[node_index])/self.speed
+                    for customer_name in order.customers:
+                        mv_time += customers[customer_name].time_info[6] #예상 가게 준비시간
+                        mv_time += customers[customer_name].time_info[7] #예상 고객 준비시간
+                        times.append(self.env.now - customers[customer_name].time_info[0])
+                    WagePerMin = round(order.fee/mv_time,2) #분당 이익
+                    if len(order.route) > 2:
+                        #WagePerMin = 1000 + (100 - Basic.distance(rev_route[0],rev_route[1])) #현재 위치에서 가까운
+                        #WagePerMin = 1000 + max(0,(100 - sum(times)/len(times))) #최신의 고객들 부터 선택하도록
                         pass
-                    #score = [[order.index, rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time],...]
-            #input('확인2')
+                    #input('추가 경로 {}'.format(order.route))
+                    if type(order.route) == tuple:
+                        order.route = list(order.route)
+                    score.append([order.index] + [order.route ,None,None,None,order.customers,None] + [WagePerMin])
         if len(score) > 0:
-            #input('라이더 {} 최단경로 실행/ 대상 경로 수 {}, 내용{}'.format(self.name, len(score), score[0]))
-            #self.candidates.append(len(score))
-            #input('선택지 수 {}'.format(len(score)))
-            score.sort(key=operator.itemgetter(sort_standard))
-            # input('최단경로 실행1/ 대상 경로 수 {}, 내용{}'.format(len(score), score[0]))
+            score.sort(key=operator.itemgetter(sort_standard), reverse = True)
+            #input('score 체크{}'.format(score))
             return score[0]
         else:
             print('가능한 주문 X/ 대상 주문{}'.format(len(bound_order_names)))
@@ -482,7 +508,7 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500):
+    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -491,6 +517,7 @@ class Customer(object):
         self.store_loc = store_loc
         self.store = store
         self.type = 'single_order'
+        self.min_FLT = p2 #Basic.distance(input_location, store_loc) #todo: 고객이 기대하는 FLT 시간.
         self.fee = fee + 150*Basic.distance(input_location, store_loc)
         self.ready_time = None #가게에서 음식이 조리 완료된 시점
         self.who_serve = []

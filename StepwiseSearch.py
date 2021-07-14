@@ -74,9 +74,15 @@ class StepwiseSearch(object):
             scores.append([ele, self.nets[ele]])
             test.append(self.nets[ele])
         #input('점수 분포 {}'.format(sorted(test)))
+        rev_test = list(set(test))
+        rev_test.sort(reverse = True)
+        second_val = rev_test[1]
+        test.sort(reverse = True)
+        index = test.index(second_val)
         scores.sort(key=operator.itemgetter(1), reverse = True)
-        update_num = min(5,int(len(scores) * self.alpha) )
-        upper_scores = scores[:update_num]
+        upper_scores = scores[:index]
+        #update_num = min(5,int(len(scores) * self.alpha) )
+        #upper_scores = scores[:update_num]
         self.r_k = self.r_k * self.beta
         neighbors = []
         for j in [-1,0,1]: #todo : 위 아래로 1칸 씩 변수의 수가 증가하면 이 과정이 증가되어야 함.
@@ -96,6 +102,21 @@ class StepwiseSearch(object):
                 count += 1
         #input('전체 {} / 추가 {} 개'.format(len(scores), count))
 
+
+    def NetUpdaterReverse(self):
+        scores = []
+        test = []
+        for ele in self.nets:
+            scores.append([ele, self.nets[ele]])
+            test.append(self.nets[ele])
+        cut_value = max(test) #ele has cut_value inherited to next nets.
+        #delete nets
+        delete_keys = []
+        for ele in self.nets:
+            if self.nets[ele] < cut_value:
+                delete_keys.append(ele)
+        for delete_key in delete_keys:
+            del self.nets[delete_key]
 
     def Check(self, ele, data, orders):
         scores = []
@@ -163,7 +184,7 @@ def Coeff_Check(coeff, datas):
 def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_para = False):
     coeff = list(range(len(init_coeff)))
     # D.V. and model set.
-    md1 = Model('IP_model')
+    md1 = Model('Coeff_model')
     x = md1.continuous_var_list(len(coeff),name = 'x')
     #z = md1.continuous_var_list(1 + len(past_data),name = 'v')
     #a = md1.continuous_var_list(len(coeff) ,name = 'a')
@@ -175,6 +196,8 @@ def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_par
     #Add Constrsints
     md1.add_constraints( x[i] <= u[i] for i in coeff)
     md1.add_constraints(-x[i] <= u[i] for i in coeff)
+
+
     for other_info in now_data[1:]:
         md1.add_constraint((x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1] - error >= (
                     x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
@@ -188,8 +211,16 @@ def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_par
                             p_other_info[1])
     msol = md1.solve()
     print(msol)
-    input('CPLEX 확인')
-    return None, msol
+    if msol == None:
+        #input('CPLEX 확인1')
+        return None, None
+    else:
+        #print(msol.get_infeasibility())
+        print(msol.get_all_values())
+        res = msol.get_all_values()[:2]
+        print(res)
+        #input('CPLEX 확인2')
+        return True, res
 
 def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_para = False):
     coeff = list(range(len(init_coeff)))
@@ -280,21 +311,24 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
         return False, None
 
 class LP_search(object):
-    def __init__(self, name, func, init, T = 50):
+    def __init__(self, name, func, init, T = 50, engine_type = 'Gurobi'):
         self.name = name
         self.func = func
         self.init = init
         self.past_data = []
         self.true_coeff = None
         self.path = []
+        self.engine_type = engine_type
 
     def LP_Solver(self, org_data, customers):
         data = [customers[org_data[0]].data_vector]
         for name in org_data[1]:
             data.append(customers[name].data_vector)
         #input('초기 값 {} 입력 데이터 {}'.format(self.init, data))
-        #feasiblity, res = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
-        feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
+        if self.engine_type == 'Gurobi':
+            feasiblity, res = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
+        else:
+            feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
         if feasiblity == True:
             for index in range(len(res)):
                 self.init[index] += res[index]
@@ -303,7 +337,10 @@ class LP_search(object):
         else:
             #input('해 없음'.format())
             #print('확인용 계산: 라이더의 Coeff {} : 오라클의 Coeff {}'.format())
-            feasiblity2, res2 = ReviseCoeff_MJByGurobi(self.true_coeff, data, self.past_data, error= 0, print_para= False)
+            if self.engine_type == 'Gurobi':
+                feasiblity2, res2 = ReviseCoeff_MJByGurobi(self.true_coeff, data, self.past_data, error= 0, print_para= False)
+            else:
+                feasiblity2, res2 = ReviseCoeff_MJByCplex(self.true_coeff, data, self.past_data, error=0, print_para=False)
             #input('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))
             print('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))
             if feasiblity2 == False:
@@ -312,8 +349,10 @@ class LP_search(object):
         self.past_data.append(data)
         #input('LP_Solver 확인'.format())
 
+def func(p1, p2, x):
+    return p1 * x + p2
 
-def GrahDraw(engine, rider):
+def GrahDraw(engine, rider, centre = False, saved_info = 'forward'):
     vectors = []
     test = []
     x = []
@@ -343,10 +382,31 @@ def GrahDraw(engine, rider):
     plt.xlabel(' c1', labelpad=10)
     plt.ylabel(' c2', labelpad=10)
     plt.title('ITE {} :: Target Value -> c1:{} c2:{}'.format(engine.ite, rider.coeff_vector[0], rider.coeff_vector[1]))
-    plt.savefig('ITE {}.png'.format(engine.ite))
-    plt.close()
-    #plt.show()
-    #input('Next -> ITE {}'.format(engine.ite))
+    cluster = None
+    if centre == True:
+        rev_data = []
+        for index in range(len(x)):
+            # for _ in range(int(z[index])):
+            #    rev_data.append([x[index], y[index]])
+            rev_data.append([x[index], y[index]])
+        rev_data = numpy.array(rev_data)
+        # kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data)
+        kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
+        plt.scatter(rider.coeff_vector[0], rider.coeff_vector[1], color='b', marker="X", s=20)
+        cluster = [round(kmeans.cluster_centers_[0][0], 4), round(kmeans.cluster_centers_[0][1], 4)]
+        plt.scatter(cluster[0], cluster[1], color='g', marker="*", s=20)
+        z = numpy.array(z)
+        p1, p2 = numpy.polynomial.polynomial.polyfit(x, y, 1, w=z)
+        x = numpy.array(x)
+        plt.plot(x, func(p1, p2, x))
+        plt.savefig('ITE {} _ {} .png'.format(engine.ite, saved_info))
+        plt.close()
+    else:
+        plt.savefig('ITE {} _ {} .png'.format(engine.ite, saved_info))
+        plt.close()
+    return cluster
+
+
 ##실행부
 org_value = []
 exp_value = []
@@ -354,25 +414,32 @@ dis_value = []
 for ITE_num in range(1):
     #1라이더 정의
     Riders = {}
-    vector = [round(random.random(),2),-round(random.random(),2)]
+    vector = [round(random.random(),2), -round(random.random(),2)]
     for name in range(3):
         r = Rider(name, vector)
         Riders[name] = r
     print('라이더 벡터 {}'.format(Riders[0].coeff_vector))
     #2Stepwise 시작 정의
-    ITE = 100
+    ITE = 500
     beta = 0.8
-    init_nets = {}
-    for i in numpy.arange(-1,1,0.4):
-        for j in numpy.arange(-1,1,0.4):
-            init_nets[i,j] = 0
-    engine = StepwiseSearch(1, None, init_nets, 0.4)
+    init_nets_forward = {}
+    for i in numpy.arange(-1.5,1.5,0.4):
+        for j in numpy.arange(-1.5,1.5,0.4):
+            init_nets_forward[i, j] = 0
+    init_nets_reverse = {}
+    for i in numpy.arange(-1,1,0.01):
+        for j in numpy.arange(-1,1,0.01):
+            init_nets_reverse[i, j] = 0
+    engine_forward = StepwiseSearch(1, None, init_nets_forward, 0.4)
+    engine_reverse = StepwiseSearch(1, None, init_nets_reverse, 0.4, T=10)
     #init_vector = [round(random.random(),2),-round(random.random(),2)]
     init_vector = [0.5,0.5]
     print('초기 값', init_vector)
-    LP_engine = LP_search(1, None, init_vector)
-    LP_engine.true_coeff = vector
-    print('LP_engine 벡터 {}'.format(LP_engine.true_coeff))
+    LP_engineByGurobi = LP_search(1, None, init_vector, engine_type='Gurobi')
+    LP_engineByCplex = LP_search(1, None, init_vector, engine_type='Cplex')
+    LP_engineByGurobi.true_coeff = vector
+    LP_engineByCplex.true_coeff = vector
+    print('LPGurobi_engine 벡터 {} :: LPCplex_engine 벡터 {}'.format(LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
     Orders = {}
     pool = list(numpy.arange(0, 10, 0.1))
     for t in range(ITE):
@@ -395,34 +462,48 @@ for ITE_num in range(1):
                 observation.append(ob)
         for ob in observation:
             print('대상 데이터 {}'.format(ob))
-            engine.Updater(ob, Orders, Riders[0])
-            LP_engine.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
+            engine_forward.Updater(ob, Orders, Riders[0])
+            engine_reverse.Updater(ob, Orders, Riders[0])
+            #LP_engineByGurobi.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
+            #LP_engineByCplex.LP_Solver(ob, Orders)
             #Coeff_Check(Riders[0].coeff_vector, LP_engine.past_data)
-            print('확인용 계산: 라이더의 Coeff {} : 오라클의 Coeff {}'.format(Riders[0].coeff_vector, LP_engine.true_coeff ))
-            print('실제값 {} -> 예측 값 {}'.format(Riders[0].coeff_vector, LP_engine.init))
-        if engine.ite % engine.T == 0 and engine.ite > 0:
-            engine.NetUpdater()
-            GrahDraw(engine, Riders[0])
+            print('확인용 계산: 라이더의 Coeff {} : 오라클(Gurobi)의 Coeff {} : 오라클(Cplex)의 Coeff {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
+            print('실제값 {} -> Gurobi 예측 값 {} : Cplex 예측 값 {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.init , LP_engineByCplex.init))
+        if engine_forward.ite % engine_forward.T == 0 and engine_forward.ite > 0:
+            engine_forward.NetUpdater()
+            #engine_reverse.NetUpdaterReverse()
+            #engine.NetUpdaterReverse()
+            GrahDraw(engine_forward, Riders[0])
+            #GrahDraw(engine_reverse, Riders[0], info = 'backward')
             #input('LP_search 결과 {} : 실제 {}'.format(LP_engine.init, Riders[0].coeff_vector))
-            print('LP_search 결과 {} : 실제 {}: 시작 값 {}'.format(LP_engine.init, Riders[0].coeff_vector, init_vector))
-        engine.ite += 1
+            print('LP_Gurobi 결과 {} : LP_Cplex 결과 {} :실제 {}: 시작 값 {}'.format(LP_engineByGurobi.init,LP_engineByCplex.init, Riders[0].coeff_vector, init_vector))
+        if engine_reverse.ite % engine_reverse.T == 0 and engine_reverse.ite > 0:
+            engine_reverse.NetUpdaterReverse()
+            GrahDraw(engine_reverse, Riders[0], saved_info='backward')
+        engine_forward.ite += 1
+        engine_reverse.ite += 1
         print('ITE {} 종료'.format(t))
     try:
         print('라이더의 벡터 : {} 비율 : {}'.format(Riders[0].coeff_vector,Riders[0].coeff_vector[0]/Riders[0].coeff_vector[1]))
     except:
         pass
+    foward_Search = GrahDraw(engine_forward, Riders[0], centre= True)
+    reverse_Search = GrahDraw(engine_reverse, Riders[0], centre= True, saved_info='backward')
+    print('foward_Search 클러스터 {}'.format(foward_Search))
+    print('reverse_Search 클러스터 {} : 남은 해들 {}'.format(reverse_Search, list(engine_reverse.nets.keys())))
+    input('정지')
+
     vectors = []
     test = []
     x = []
     y = []
     z = []
-    for net in engine.nets:
-        vectors.append([net, engine.nets[net]])
-        test.append(engine.nets[net])
+    for net in engine_forward.nets:
+        vectors.append([net, engine_forward.nets[net]])
+        test.append(engine_forward.nets[net])
         x.append(net[0])
         y.append(net[1])
-        z.append(engine.nets[net])
-
+        z.append(engine_forward.nets[net])
     rev_z = []
     max_val = max(z)
     for info in z:
@@ -432,14 +513,12 @@ for ITE_num in range(1):
     for info in vectors[:20]:
         #print('순위 : {}, 정보 {} 점수 {} 비율 {} '.format(count, info[0], info[1],info[0][0]/info[0][1]))
         count += 1
-
     vectors.sort(key= operator.itemgetter(1))
     count = 1
     for info in vectors[:20]:
         #print('순위 : 하위 {}, 정보 {} 점수 {} 비율 {}'.format(count, info[0], info[1],info[0][0]/info[0][1]))
         count += 1
-    print('평균 1 획득률 {}/ 평균 점수 {}'.format(sum(engine.ratio)/len(engine.ratio), sum(test)/len(test)))
-
+    print('평균 1 획득률 {}/ 평균 점수 {}'.format(sum(engine_forward.ratio) / len(engine_forward.ratio), sum(test) / len(test)))
     #클러스터 탐색
     rev_data = []
     for index in range(len(x)):
@@ -451,7 +530,8 @@ for ITE_num in range(1):
     kmeans = KMeans(n_clusters=1, random_state=0).fit(rev_data, sample_weight=z)
     print('목표 {}'.format(Riders[0].coeff_vector))
     print('결과 StepWise{}'.format(kmeans.cluster_centers_[0]))
-    print('결과 LP {}, LP 변화 경로{}'.format(LP_engine.init, LP_engine.path))
+    print('결과 Gurobi LP {}, LP 변화 경로{}'.format(LP_engineByGurobi.init, LP_engineByGurobi.path))
+    print('결과 Cplex LP {}, LP 변화 경로{}'.format(LP_engineByCplex.init, LP_engineByCplex.path))
     input('결과 확인')
     rev_z = numpy.array(rev_z)
     alphas = numpy.array(rev_z)
@@ -476,24 +556,7 @@ for ITE_num in range(1):
         return  p1 * x + p2
     x = numpy.array(x)
     plt.plot(x, func(p1, p2, x))
-    """
-    plt.scatter(x, y)
-    
-    w = np.ones(x.shape[0])
-    w[1] = 12
-    # p1, p2 = np.polyfit(x, y, 1, w=w)
-    p1, p2 = np.polynomial.polynomial.polyfit(x, y, 1, w=w)
-    print(p1, p2, w)
-    
-    plt.plot(x, func(p1, p2, x))
-    
-    
-    x = numpy.array(x)
-    m, b = numpy.polyfit(x, y, 1)
-    plt.plot(x, m*x + b)
-    plt.show()
-    """
-    #plt.show()
+
     plt.savefig('ITE{}.png'.format(ITE_num))
     plt.clf()  # Clear figure
     org_value.append(Riders[0].coeff_vector)
