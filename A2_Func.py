@@ -319,7 +319,8 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False):
     for order_name in orders:
         order = orders[order_name]
         d = []
-        dist_thres = p2 - distance(order.store_loc, order.location)/speed
+        #dist_thres = p2 - distance(order.store_loc, order.location)/speed
+        dist_thres = order.p2
         for order2_name in orders:
             order2 = orders[order2_name]
             dist = distance(order.store_loc, order2.store_loc)/speed
@@ -422,7 +423,7 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     return idle_riders, len(interval_riders)
 
 
-def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000):
+def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False):
     """
     Construct unpicked_orders with bundled customer
     :param bundles: constructed bundles
@@ -433,12 +434,13 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
     bundle_names = []
     names = []
     res = {}
+    #info = [[route, max(ftds), average(ftds), min(ftds), names],...,]
     for info in bundle_infos:
         bundle_names += info[4]
-        if len(bundle_names) == 1:
-            customer = customer_set[info[4]]
+        if len(info[4]) == 1:
+            customer = customer_set[info[4][0]]
             route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
-            o = Order(order_index, info[4], route, 'single', fee = customer.fee)
+            o = Order(order_index, info[4][0], route, 'single', fee = customer.fee)
         else:
             route = []
             for node in info[0]:
@@ -458,7 +460,6 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
         res[order_index] = o
         #res.append(o)
         order_index += 1
-        #print('추가 정보 {}'.format(info))
     for index in platform_set.platform:
         order = platform_set.platform[index]
         if order.type == 'single':
@@ -476,7 +477,12 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
     for index in platform_set.platform:
         already_ordered_customer_names += platform_set.platform[index].customers
     for customer_name in unpicked_orders:
-        if customer_name not in bundle_names + already_ordered_customer_names:
+        if divide_option == True:
+            condition = customer_name not in already_ordered_customer_names
+        else:
+            condition = customer_name not in bundle_names + already_ordered_customer_names
+        #if customer_name not in bundle_names + already_ordered_customer_names:
+        if condition == True:
             names.append(customer_name)
             customer = customer_set[customer_name]
             if customer.time_info[1] == None:
@@ -485,7 +491,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
                 #res.append(o)
                 res[order_index] = o
                 order_index += 1
-                print('추가 정보22 {}'.format(customer_name))
+                #print('추가 정보22 {}'.format(customer_name))
     return res
 
 
@@ -534,7 +540,7 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
     print('실려있는 고객 {}'.format(print2))
     return rev_order
 
-def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False):
+def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False):
     B2 = []
     B3 = []
     while env.now <= end_t:
@@ -557,14 +563,6 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             else:
                 b2 = 0
                 b3 = int(lamda1/3)
-            if b2 > 0:
-                print("B2 처리 시작")
-                t1 = time.time()
-                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed, option = option)
-                t2 = time.time()
-                print(f"B2 처리시간：{t2 - t1}")
-                #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
-                B2 = b2_bundle
             if b3 > 0:
                 print("B3 처리 시작")
                 t1 = time.time()
@@ -573,6 +571,15 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 print(f"B3 처리시간：{t2 - t1}")
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
                 B3 = b3_bundle
+            if b2 > 0 or len(B3) < b3:
+                b2 = int((b3 - len(B3))*1.5)
+                print("B2 처리 시작")
+                t1 = time.time()
+                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed, option = option)
+                t2 = time.time()
+                print(f"B2 처리시간：{t2 - t1}")
+                #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
+                B2 = b2_bundle
             print('B2:', B2)
             print('B3:', B3)
             B = B2 + B3
@@ -592,7 +599,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 bundle_names += platform_set.platform[index].customers
                 #print('2 order index : {} added : {}'.format(order.index,order.customers))
             print('고객 이름들 2 :: {}'.format(list(bundle_names)))
-            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
+            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set, divide_option = divide_option) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
             bundle_names = []
             for index in new_orders:
                 bundle_names += new_orders[index].customers

@@ -7,6 +7,8 @@ import random
 import A1_BasicFunc as Basic
 import time
 
+
+
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
 # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
 class Order(object):
@@ -44,6 +46,7 @@ class Rider(object):
         self.idle_time = 0
         self.candidates = []
         self.b_select = 0
+        self.income = 0
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type))
 
 
@@ -98,6 +101,7 @@ class Rider(object):
                             self.container.remove(node_info[0])
                             self.onhand.remove(node_info[0])
                             self.served.append(node_info[0])
+                            self.income += order.fee
                         except:
                             input('현재 컨테이너::{}/들고 있는 주문::{}/대상 주문::{}'.format(self.container,self.onhand,node_info[0]))
                         #todo: order를 완료한 경우 order를 self.picked_orders에서 제거해야함.
@@ -153,6 +157,7 @@ class Rider(object):
                     self.OrderPick(added_order, order_info[1], customers, env.now)
                     if len(added_order.route) > 2:
                         self.b_select += 1
+                    Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
                 else:
                     if len(self.route) > 0:
                         pass
@@ -215,6 +220,7 @@ class Rider(object):
                         mv_time += customers[customer_name].time_info[6] #예상 가게 준비시간
                         mv_time += customers[customer_name].time_info[7] #예상 고객 준비시간
                         times.append(self.env.now - customers[customer_name].time_info[0])
+                        #self.income += customers[customer_name].fee
                     WagePerMin = round(order.fee/mv_time,2) #분당 이익
                     if len(order.route) > 2:
                         #WagePerMin = 1000 + (100 - Basic.distance(rev_route[0],rev_route[1])) #현재 위치에서 가까운
@@ -522,6 +528,7 @@ class Customer(object):
         self.ready_time = None #가게에서 음식이 조리 완료된 시점
         self.who_serve = []
         self.distance = Basic.distance(input_location, store_loc)
+        self.p2 = p2
 
 class Platform_pool(object):
     def __init__(self):

@@ -2,7 +2,7 @@
 import math
 import random
 import A1_Class as Class
-
+import time
 
 
 def distance(p1, p2):
@@ -81,7 +81,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     for order_name in names:
         if order_name not in except_names:
             #rev_p2 = p2
-            rev_p2 = customers[order_name].min_FLT
+            rev_p2 = customers[order_name].p2
             if customers[order_name].time_info[2] != None:
                 #print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
                 last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
@@ -141,7 +141,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 
-def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15):
+def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15, p2_set = False, speed = 4):
     """
     Generate customer order
     :param env: Simpy Env
@@ -162,9 +162,75 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
             input_location = history[name][2]
             store_num = history[name][1]
             interval = history[name + 1][0] - history[name][0]
-        order = Class.Customer(env, name, input_location, store = store_num, store_loc = stores[store_num].location, p2 = p2)
+        order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2)
+        if p2_set == True:
+            order.p2 = p2 * order.distance / speed
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         yield env.timeout(interval)
         #print('현재 {} 플랫폼 주문 수 {}'.format(int(env.now), len(platform)))
         name += 1
+
+def UpdatePlatformByOrderSelection(platform, order_index):
+    """
+    선택된 주문과 겹치는 고객을 가지는 주문이 플랫폼에 존재한다면, 해당 주문을 삭제하는 함수.
+    @param platform: class platform
+    @param order_index: 라이더가 선택한 주문.
+    """
+    delete_order_index = []
+    order = platform.platform[order_index]
+    for order_index in platform.platform:
+        compare_order = platform.platform[order_index]
+        duplicate_customers = list(set(order.customers).intersection(compare_order.customers))
+        if len(duplicate_customers) > 1:
+            delete_order_index.append(compare_order.index)
+    for order_index in delete_order_index:
+        del platform.platform[order_index]
+
+
+def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None'):
+    tm = time.localtime(time.time())
+    sub = ['Day {} Hr{}Min{}Sec{}/ SUB {} '.format(tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,sub_info)]
+    rider_header = ['라이더 이름', '서비스 고객수', '주문 탐색 시간','선택한 번들 수','라이더 수익','경로']
+    rider_infos = [sub,rider_header]
+    for rider_name in Riders:
+        rider = Riders[rider_name]
+        info = [rider_name, len(rider.served), rider.idle_time, rider.b_select, rider.income, rider.visited_route]
+        rider_infos.append(info)
+    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 도착 시점','고객 도착 시점','음식 대기시간','수수료', '수행 라이더 정보', '직선 거리']
+    customer_infos = [sub, customer_header]
+    for customer_name in Customers:
+        customer = Customers[customer_name]
+        wait_t = None
+        try:
+            wait_t = customer.ready_time - customer.time_info[2]
+        except:
+            pass
+        info = [customer_name] + customer.time_info[:4] + [wait_t, customer.fee,customer.who_serve, customer.distance]
+        customer_infos.append(info)
+    f = open(title + "riders.txt", 'a')
+    for info in rider_infos:
+        count = 0
+        for ele in info:
+            data = ele
+            if type(ele) != str:
+                data = str(ele)
+            f.write(data)
+            f.write(';')
+            count += 1
+            if count == len(info):
+                f.write('\n')
+    f.close()
+    f = open(title + "customers.txt", 'a')
+    for info in customer_infos:
+        count = 0
+        for ele in info:
+            data = ele
+            if type(ele) != str:
+                data = str(ele)
+            f.write(data)
+            f.write(';')
+            count += 1
+            if count == len(info):
+                f.write('\n')
+    f.close()

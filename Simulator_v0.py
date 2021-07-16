@@ -2,7 +2,7 @@
 
 import simpy
 import random
-from A1_BasicFunc import Ordergenerator, RiderGenerator
+from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave
 from A1_Class import Store, Platform_pool
 from A2_Func import Platform_process, ResultPrint
 import operator
@@ -10,13 +10,13 @@ import operator
 #Parameter define
 order_interval = 1.3
 interval = 5
-p2 = 20 #주의할 것.
+
 thres_p = 1
-run_time = 100
+run_time = 150
 rider_working_time = 120
 #env = simpy.Environment()
 store_num = 20
-rider_num = 1
+rider_num = 3
 rider_gen_interval = 1
 rider_speed = 4
 rider_capacity = 1
@@ -24,6 +24,10 @@ ITE_NUM = 1
 option_para = True #True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
 customer_max_range = 50
 store_max_range = 30
+divide_option = True # True : 구성된 번들에 속한 고객들을 다시 개별 고객으로 나눔. False: 번들로 구성된 고객들은 번들로만 구성
+p2_set = True
+p2 = 5 #p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
+
 
 class scenario(object):
     def __init__(self, name, p1, p2):
@@ -66,15 +70,15 @@ for ite in range(ITE_NUM):
         env = simpy.Environment()
         for store_name in range(store_num):
             loc = store_history[store_name]
-            store = Store(env, Platform2, store_name, loc=loc, capacity=10, print_para=False)
+            store = Store(env, Platform2, store_name, loc=loc, order_ready_time= 0.1, capacity=10, print_para=False)
             Store_dict[store_name] = store
         env.process(RiderGenerator(env, Rider_dict, Platform2, Store_dict, Orders, speed=rider_speed,
                                    interval=rider_gen_interval, runtime=run_time, gen_num=rider_num,
                                    capacity=rider_capacity, history= rider_history))
-        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime=run_time, p2 = p2))
+        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime=run_time, p2 = p2, p2_set= p2_set, speed= rider_speed))
         if sc.platform_work == True:
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
-                                         end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para))
+                                         end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option))
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed)
         sc.res.append(res)
@@ -115,7 +119,7 @@ for ite in range(ITE_NUM):
             print('라이더 {} 경로 :: {}'.format(rider.name, rider.visited_route))
         ave_wait_time = round(wait_time/len(Rider_dict),2)
         print('candis 수 {}'.format(candis))
-        print('라이더 수 {} 평균 수행 주문 수 {} 평균 유휴 분 {} 평균 후보 수 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2),round(sum(candis)/len(candis),2)))
+        print('라이더 수 {} 평균 수행 주문 수 {} 평균 유휴 분 {} 평균 후보 수 {} 평균 선택 번들 수 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2),round(sum(candis)/len(candis),2), b_select/len(Rider_dict)))
         res_info = sc.res[-1]
         info = str(sc.name) + ';' + str(ite) + ';' + str(res_info[0]) + ';' + str(res_info[1]) + ';' + str(res_info[2]) + ';' +str(res_info[3]) + ';' + str(res_info[4]) + ';' + str(round(res_info[5],4)) + ';' + str(ave_wait_time) +';' +str(b_select) +'\n'
         #'시나리오로 {} ITE {} /전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'
@@ -123,6 +127,9 @@ for ite in range(ITE_NUM):
         f.write(info)
         f.close()
         #input('파일 확인')
+        sub_info = 'divide_option : {}, p2: {}, divide_option: {}, unserved_order_break : {}'.format(divide_option, p2,sc.platform_work, sc.unserved_order_break)
+        ResultSave(Rider_dict, Orders, title='Test', sub_info= sub_info)
+        input('저장 확인')
 
 for sc in scenarios:
     count = 1
