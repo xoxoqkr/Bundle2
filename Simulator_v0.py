@@ -26,8 +26,8 @@ customer_max_range = 50
 store_max_range = 30
 divide_option = True # True : 구성된 번들에 속한 고객들을 다시 개별 고객으로 나눔. False: 번들로 구성된 고객들은 번들로만 구성
 p2_set = True
-p2 = 5 #p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
-
+p2 = 2 #p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
+order_p2 = [[1.3,1.6,2],[0.3,0.3,0.4]] #음식 별로 민감도가 차이남.
 
 class scenario(object):
     def __init__(self, name, p1, p2):
@@ -59,8 +59,10 @@ for ite in range(ITE_NUM):
         store_history.append(list(random.sample(range(20 , store_max_range), 2)))
     for sc in scenarios:
         if sc.name == 'A':
+            score_type = 'oracle'
             rider_capacity = 2
         else:
+            score_type = 'simple'
             rider_capacity = 1
         Rider_dict = {}
         Orders = {}
@@ -74,8 +76,8 @@ for ite in range(ITE_NUM):
             Store_dict[store_name] = store
         env.process(RiderGenerator(env, Rider_dict, Platform2, Store_dict, Orders, speed=rider_speed,
                                    interval=rider_gen_interval, runtime=run_time, gen_num=rider_num,
-                                   capacity=rider_capacity, history= rider_history))
-        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime=run_time, p2 = p2, p2_set= p2_set, speed= rider_speed))
+                                   capacity=rider_capacity, history= rider_history, score_type= score_type))
+        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime=run_time, p2 = order_p2, p2_set= p2_set, speed= rider_speed))
         if sc.platform_work == True:
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option))

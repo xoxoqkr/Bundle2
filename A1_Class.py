@@ -529,6 +529,7 @@ class Customer(object):
         self.who_serve = []
         self.distance = Basic.distance(input_location, store_loc)
         self.p2 = p2
+        #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):
     def __init__(self):

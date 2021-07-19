@@ -110,7 +110,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     return True, ftds
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True):
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple'):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -126,7 +126,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom)
+        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, score_type = score_type)
         Rider_dict[rider_num] = single_rider
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
         print('라이더 {} 생성. T {}'.format(rider_num, int(env.now)))
@@ -164,7 +164,11 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
             interval = history[name + 1][0] - history[name][0]
         order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2)
         if p2_set == True:
-            order.p2 = p2 * order.distance / speed
+            if type(p2) == list:
+                selected_p2 = random.choice(population=p2[0],weights=p2[1],k=1)
+                order.p2 = selected_p2 * order.distance / speed
+            else:
+                order.p2 = p2 * order.distance / speed
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         yield env.timeout(interval)
