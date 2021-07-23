@@ -110,7 +110,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     return True, ftds
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple'):
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple', wait_para = False):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -126,7 +126,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, score_type = score_type)
+        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para)
         Rider_dict[rider_num] = single_rider
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
         print('라이더 {} 생성. T {}'.format(rider_num, int(env.now)))
@@ -141,7 +141,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 
-def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15, p2_set = False, speed = 4):
+def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15, p2_set = False, speed = 4, cooking_time = [2,5]):
     """
     Generate customer order
     :param env: Simpy Env
@@ -162,13 +162,18 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
             input_location = history[name][2]
             store_num = history[name][1]
             interval = history[name + 1][0] - history[name][0]
-        order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2)
+        order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2, cooking_time = cooking_time)
         if p2_set == True:
             if type(p2) == list:
-                selected_p2 = random.choice(population=p2[0],weights=p2[1],k=1)
+                selected_p2 = random.choices(population=p2[0],weights=p2[1],k=1)
+                selected_p2 = selected_p2[0]
+                #input('test {} {} {}'.format(selected_p2, order.distance, speed))
                 order.p2 = selected_p2 * order.distance / speed
+                order.min_FLT = order.p2
             else:
-                order.p2 = p2 * order.distance / speed
+                order.p2 = p2 * (order.distance / speed)
+                order.min_FLT = order.p2
+                #input('p2 {} / dist {}  order.p2 {}'.format(p2, order.p2))
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         yield env.timeout(interval)
@@ -195,13 +200,21 @@ def UpdatePlatformByOrderSelection(platform, order_index):
 def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None'):
     tm = time.localtime(time.time())
     sub = ['Day {} Hr{}Min{}Sec{}/ SUB {} '.format(tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,sub_info)]
-    rider_header = ['라이더 이름', '서비스 고객수', '주문 탐색 시간','선택한 번들 수','라이더 수익','경로']
+    rider_header = ['라이더 이름', '서비스 고객수', '주문 탐색 시간','선택한 번들 수','라이더 수익','음식점 대기시간','대기시간_번들','대기시간_단건주문','경로']
     rider_infos = [sub,rider_header]
     for rider_name in Riders:
         rider = Riders[rider_name]
-        info = [rider_name, len(rider.served), rider.idle_time, rider.b_select, rider.income, rider.visited_route]
+        if len(rider.bundle_store_wait) > 0:
+            bundle_store_wait = round(sum(rider.bundle_store_wait) / len(rider.bundle_store_wait), 2)
+        else:
+            bundle_store_wait = 0
+        if len(rider.single_store_wait) > 0:
+            single_store_wait = round(sum(rider.single_store_wait) / len(rider.single_store_wait), 2)
+        else:
+            single_store_wait = None
+        info = [rider_name, len(rider.served), rider.idle_time, rider.b_select, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,rider.visited_route]
         rider_infos.append(info)
-    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 도착 시점','고객 도착 시점','음식 대기시간','수수료', '수행 라이더 정보', '직선 거리']
+    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 도착 시점','고객 도착 시점','음식 대기시간','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간']
     customer_infos = [sub, customer_header]
     for customer_name in Customers:
         customer = Customers[customer_name]
@@ -210,7 +223,7 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None'):
             wait_t = customer.ready_time - customer.time_info[2]
         except:
             pass
-        info = [customer_name] + customer.time_info[:4] + [wait_t, customer.fee,customer.who_serve, customer.distance]
+        info = [customer_name] + customer.time_info[:4] + [wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait]
         customer_infos.append(info)
     f = open(title + "riders.txt", 'a')
     for info in rider_infos:

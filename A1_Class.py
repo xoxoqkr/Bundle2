@@ -24,7 +24,7 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple'):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple', wait_para = False):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
@@ -47,6 +47,10 @@ class Rider(object):
         self.candidates = []
         self.b_select = 0
         self.income = 0
+        self.wait_para = wait_para
+        self.store_wait = 0
+        self.bundle_store_wait = [] #번들에 속한 주문들에 의해 발생한 대기 시간
+        self.single_store_wait = [] #일반 주문에 의해 발생한 대기 시간
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type))
 
 
@@ -86,6 +90,18 @@ class Rider(object):
                     print('T: {} 라이더 : {} 노드 {} 이동 시작 예상 시간{}'.format(int(env.now), self.name, node_info, move_t))
                     if node_info[1] == 0: #가게인 경우
                         yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_t))
+                        if self.wait_para == True:
+                            wait_at_store = round(env.now - order.time_info[1],2)
+                            if order.cook_time > wait_at_store:
+                                yield env.timeout(wait_at_store)
+                                self.store_wait += wait_at_store
+                                order.rider_wait = wait_at_store
+                            else:
+                                wait_at_store = 0
+                            if order.inbundle == True:
+                                self.bundle_store_wait.append(wait_at_store)
+                            else:
+                                self.single_store_wait.append(wait_at_store)
                         print('T:{} 라이더{} 고객{}을 위해 가게 {} 도착'.format(int(env.now), self.name, customers[node_info[0]].name,customers[node_info[0]].store))
                         self.container.append(node_info[0])
                         order.time_info[2] = env.now
@@ -394,6 +410,8 @@ class Rider(object):
         names = order.customers
         for name in names:
             customers[name].time_info[1] = now_t
+            if len(names) > 1:
+                customers[name].inbundle = True
             #print('주문 {}의 고객 {} 가게 위치{} 고객 위치{}'.format(order.index, name, customers[name].store_loc, customers[name].location))
         #print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
         if route[0][1] != 0:
@@ -514,7 +532,7 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15):
+    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = [2,5]):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -529,6 +547,9 @@ class Customer(object):
         self.who_serve = []
         self.distance = Basic.distance(input_location, store_loc)
         self.p2 = p2
+        self.cook_time = random.randrange(cooking_time[0],cooking_time[1])
+        self.inbundle = False
+        self.rider_wait = 0
         #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):
