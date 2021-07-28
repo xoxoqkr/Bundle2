@@ -423,7 +423,7 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     return idle_riders, len(interval_riders)
 
 
-def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False):
+def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0):
     """
     Construct unpicked_orders with bundled customer
     :param bundles: constructed bundles
@@ -455,6 +455,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
             fee = 0
             for customer_name in info[4]:
                 fee += customer_set[customer_name].fee #주문의 금액 더하기.
+                customer_set[customer_name].in_bundle_time = now_t
             o = Order(order_index, info[4], route, 'bundle', fee = fee)
         o.average_ftd = info[2]
         res[order_index] = o
@@ -599,7 +600,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 bundle_names += platform_set.platform[index].customers
                 #print('2 order index : {} added : {}'.format(order.index,order.customers))
             print('고객 이름들 2 :: {}'.format(list(bundle_names)))
-            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set, divide_option = divide_option) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
+            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2)) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
             bundle_names = []
             for index in new_orders:
                 bundle_names += new_orders[index].customers

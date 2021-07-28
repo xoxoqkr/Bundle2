@@ -185,7 +185,7 @@ for ite in range(ITE_NUM):
         f.close()
         #input('파일 확인')
         sub_info = 'divide_option : {}, p2: {}, divide_option: {}, unserved_order_break : {}'.format(divide_option, p2,sc.platform_work, sc.unserved_order_break)
-        ResultSave(Rider_dict, Orders, title='Test', sub_info= sub_info)
+        ResultSave(Rider_dict, Orders, title='Test', sub_info= sub_info, type_name= sc.name)
         input('저장 확인')
 
 for sc in scenarios:

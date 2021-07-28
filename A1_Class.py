@@ -49,8 +49,11 @@ class Rider(object):
         self.income = 0
         self.wait_para = wait_para
         self.store_wait = 0
+        self.num_bundle_customer = 0
         self.bundle_store_wait = [] #번들에 속한 주문들에 의해 발생한 대기 시간
         self.single_store_wait = [] #일반 주문에 의해 발생한 대기 시간
+        self.onhand_order_indexs = []
+        self.decision_moment = []
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type))
 
 
@@ -160,6 +163,8 @@ class Rider(object):
                 if order_info != None:
                     #input('체크')
                     #input('T {} 라이더 {} 주문 {} 선택 : 주문 고객 {}'.format(int(env.now),self.name, order_info[0], order_info[1]))
+                    self.decision_moment.append(round(env.now,2))
+                    #print('라이더 {} :: 간격 {} 현재 {} 최근 시점 {}'.format(self.name, self.decision_moment[-1], env.now, self.decision_moment[-2]))
                     added_order = platform.platform[order_info[0]]
                     if len(added_order.customers) > 1:
                         #input('라이더 {} 번들 {} 선택'.format(self.name, added_order.route))
@@ -173,6 +178,7 @@ class Rider(object):
                     self.OrderPick(added_order, order_info[1], customers, env.now)
                     if len(added_order.route) > 2:
                         self.b_select += 1
+                        self.num_bundle_customer += len(added_order.customers)
                     Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
                 else:
                     if len(self.route) > 0:
@@ -204,7 +210,8 @@ class Rider(object):
             exp_onhand_order = order.customers + self.onhand
             #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
             if order.picked == False:
-                if ((len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num)) or (len(order.route) > 2 and len(self.onhand) < 3):
+                #if ((len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num)) or (len(order.route) > 2 and len(self.onhand) < 3):
+                if len(self.picked_orders) <= self.max_order_num:
                     if type(order.route[0]) != list:
                         input('에러 확인 {} : {}'.format(self.last_departure_loc,order.route))
                     dist = Basic.distance(self.last_departure_loc, order.route[0][2])/self.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
@@ -550,6 +557,7 @@ class Customer(object):
         self.cook_time = random.randrange(cooking_time[0],cooking_time[1])
         self.inbundle = False
         self.rider_wait = 0
+        self.in_bundle_time = None
         #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):

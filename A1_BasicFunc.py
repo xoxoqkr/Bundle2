@@ -196,11 +196,34 @@ def UpdatePlatformByOrderSelection(platform, order_index):
     for order_index in delete_order_index:
         del platform.platform[order_index]
 
+def ForABundleCount(route_info):
+    B = []
+    num_bundle_customer = 0
+    bundle_start = 0
+    b = 0
+    for node in route_info:
+        if node[1] == 0:
+            store_index = route_info.index(node)
+            for node2 in route_info[store_index:]:
+                if node[0] == node2[0] and node2[1] == 1:
+                    customer_index = route_info.index(node2)
+                    if store_index + 1 < customer_index:
+                        num_bundle_customer += 1
+                        if store_index == bundle_start + 1:
+                            #print('A', bundle_start, store_index, customer_index)
+                            b += 1
+                        else:
+                            #print('B',bundle_start, store_index, customer_index)
+                            B.append(b)
+                            b = 0
+                    break
+            bundle_start = store_index
+    return B, num_bundle_customer
 
-def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None'):
+def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name = 'A'):
     tm = time.localtime(time.time())
     sub = ['Day {} Hr{}Min{}Sec{}/ SUB {} '.format(tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec,sub_info)]
-    rider_header = ['라이더 이름', '서비스 고객수', '주문 탐색 시간','선택한 번들 수','라이더 수익','음식점 대기시간','대기시간_번들','대기시간_단건주문','경로']
+    rider_header = ['라이더 이름', '서비스 고객수', '주문 탐색 시간','선택한 번들 수','번들로 서비스된 고객 수','라이더 수익','음식점 대기시간','대기시간_번들','대기시간_단건주문','주문 선택 간격','경로']
     rider_infos = [sub,rider_header]
     for rider_name in Riders:
         rider = Riders[rider_name]
@@ -212,9 +235,21 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None'):
             single_store_wait = round(sum(rider.single_store_wait) / len(rider.single_store_wait), 2)
         else:
             single_store_wait = None
-        info = [rider_name, len(rider.served), rider.idle_time, rider.b_select, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,rider.visited_route]
+        if type_name == 'A':
+            bundle_num, num_bundle_customer = ForABundleCount(rider.visited_route)
+            #input('라이더 {} : 번들 정보 {} : 번들 고객 수 {}'.format(rider.name, bundle_num,num_bundle_customer))
+            rider.b_select = round(num_bundle_customer/2.5,2)
+            rider.num_bundle_customer = num_bundle_customer
+        decision_moment = []
+        for time_index in range(1,len(rider.decision_moment)):
+            decision_interval = rider.decision_moment[time_index] - rider.decision_moment[time_index - 1]
+            decision_moment.append(decision_interval)
+        #print('주문간격 시점 데이터 {}'.format(decision_moment))
+        decision_moment = round(sum(decision_moment) / len(decision_moment), 2)
+        #print('평균 주문간격{}'.format(decision_moment))
+        info = [rider_name, len(rider.served), rider.idle_time, rider.b_select,rider.num_bundle_customer, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,decision_moment,rider.visited_route]
         rider_infos.append(info)
-    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 도착 시점','고객 도착 시점','음식 대기시간','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간']
+    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 도착 시점','고객 도착 시점','음식 대기시간','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간','번들로 구성된 시점']
     customer_infos = [sub, customer_header]
     for customer_name in Customers:
         customer = Customers[customer_name]
@@ -223,7 +258,7 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None'):
             wait_t = customer.ready_time - customer.time_info[2]
         except:
             pass
-        info = [customer_name] + customer.time_info[:4] + [wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait]
+        info = [customer_name] + customer.time_info[:4] + [wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait,customer.in_bundle_time]
         customer_infos.append(info)
     f = open(title + "riders.txt", 'a')
     for info in rider_infos:
