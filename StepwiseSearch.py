@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import copy
 import operator
 import itertools
 import random
@@ -45,6 +46,7 @@ class Order(object):
         self.selected = False
         self.data_vector = input_value
         self.cal_type = cal_type
+        self.subsidy = 0
 
 class Rider(object):
     def __init__(self, name, input_value, cal_type = 'linear'):
@@ -57,7 +59,7 @@ class Rider(object):
         for order_name in orders:
             order = orders[order_name]
             if order.selected == False:
-                score = ValueCal(self.coeff_vector, order.data_vector, cal_type= self.cal_type)
+                score = ValueCal(self.coeff_vector, order.data_vector, cal_type= self.cal_type) + order.subsidy
                 scores.append([order_name, score])
         scores.sort(key=operator.itemgetter(1), reverse = True)
         if len(scores) > 0:
@@ -437,31 +439,48 @@ def NetMaker(range_list, interval_list):
         net_candis.append(tem)
     pass
 
+def A2_part1(exp_coeff, orders, cal_type='linear', buffer = 0.01):
+    exp_values = []
+    for order_name in orders:
+        order = orders[order_name]
+        if order.selected == False:
+            exp_value = ValueCal(exp_coeff, order.data_vector, cal_type=cal_type)
+            exp_values.append([order_name, exp_value])
+    exp_values.sort(key = operator.itemgetter(1), reverse = True)
+    s = exp_values[0][1] - exp_values[1][1]
+    #orders[exp_values[1][0]].subsidy = s + buffer
+    orders[exp_values[1][0]].subsidy = s*(1+buffer)
+    print(exp_values)
+    print('필요 s {}: 지급된 s {}'.format(s,s*(1+buffer)))
+    return exp_values[1][0]
+
+
 ##실행부
 org_value = []
 exp_value = []
 dis_value = []
-for ITE_num in range(1):
+for ITE_num in range(20):
     #1라이더 정의
     Riders = {}
-    vector = [round(random.random(),2), -round(random.random(),2), round(random.random(),2)] #선형인 경우
-    #vector = [2 + round(random.random(), 2), 2 + round(random.random(), 2),2 + round(random.random(), 2)] #지수형인 경우
+    #vector = [round(random.random(),2), -round(random.random(),2), round(random.random(),2)] #선형인 경우
+    vector = [2 + round(random.random(), 2), 2 + round(random.random(), 2),2 + round(random.random(), 2)] #지수형인 경우
     #vector = []
-    cal_type = 'linear'
+    cal_type = 'log' #linear / log
     for name in range(3):
         r = Rider(name, vector, cal_type = cal_type)
         Riders[name] = r
     print('라이더 벡터 {}'.format(Riders[0].coeff_vector))
     #2Stepwise 시작 정의
-    ITE = 500
+    ITE = 100
+    ITE2 = 150
     beta = 0.8
     init_nets_forward = {}
-    for i in numpy.arange(0,2,0.05):
-        for j in numpy.arange(-2,0,0.05):
-            for k in numpy.arange(0,2,0.05):
+    for i in numpy.arange(2,3,0.05):
+        for j in numpy.arange(2,3,0.05):
+            for k in numpy.arange(2,3,0.05):
                 init_nets_forward[i, j, k] = 0
     engine_forward = StepwiseSearch(1, None, init_nets_forward, 0.4)
-    engine_reverse = StepwiseSearch(1, None, init_nets_forward, 0.4, T=5)
+    engine_reverse = StepwiseSearch(1, None, init_nets_forward, 0.4, T=2)
     engine_reverse.xlim = [-1.5,1.5]
     engine_reverse.ylim = [-1.5,1.5]
     #init_vector = [round(random.random(),2),-round(random.random(),2)]
@@ -507,6 +526,7 @@ for ITE_num in range(1):
             pass
         if engine_reverse.ite % engine_reverse.T == 0 and engine_reverse.ite > 0:
             engine_reverse.NetUpdaterReverse()
+            print('현재 ite : {} / 존재 p 수 : {}'.format(t, len(engine_reverse.nets)))
         #GrahDraw(engine_forward, Riders[0])
         #GrahDraw(engine_reverse, Riders[0], info = 'backward')
         #input('LP_search 결과 {} : 실제 {}'.format(LP_engine.init, Riders[0].coeff_vector))
@@ -523,7 +543,8 @@ for ITE_num in range(1):
         engine_reverse.ite += 1
         print('ITE {} 종료'.format(t))
     print('True 라이더 계수 {}'.format(Riders[0].coeff_vector))
-    input('남은 p 수 : {} 내용 {}'.format(len(engine_reverse.nets),engine_reverse.nets))
+    print('남은 p 수 : {} 내용 {}'.format(len(engine_reverse.nets),engine_reverse.nets))
+    #input('확인')
     try:
         print('라이더의 벡터 : {} 비율 : {}'.format(Riders[0].coeff_vector,Riders[0].coeff_vector[0]/Riders[0].coeff_vector[1]))
     except:
@@ -531,7 +552,60 @@ for ITE_num in range(1):
     #foward_Search = GrahDraw(engine_forward, Riders[0], centre= True)
     #reverse_Search = GrahDraw(engine_reverse, Riders[0], centre= True, saved_info='backward2')
     #print('foward_Search 클러스터 {}'.format(foward_Search))
-    print('reverse_Search 클러스터 {} : 남은 해들 {}'.format(reverse_Search, list(engine_reverse.nets.keys())))
+
+    #A2알고리즘 부분
+    engine_coeff = list(engine_reverse.nets.keys())[0]
+    engine_coeff = list(engine_coeff)
+    init_engine = copy.deepcopy(engine_coeff)
+    print('A1 종료. p 확인 {}'.format(engine_coeff))
+    Orders = {}
+    pool = list(numpy.arange(0, 10, 0.1))
+    for t in range(ITE2):
+        possible_customer_count = 0
+        for name in Orders:
+            if Orders[name].selected == False:
+                possible_customer_count += 1
+        if possible_customer_count < len(Riders) + 10:
+            name_start = len(Orders)
+            name_end = len(Orders) + 10
+            for name in range(name_start, name_end):
+                #vector = random.sample(pool, 3)
+                vector = random.sample(pool, 2) + [random.choice([0, 1])]
+                o = Order(name, vector, cal_type=cal_type)
+                Orders[name] = o
+        for rider_name in Riders:
+            rider = Riders[rider_name]
+            exp_order = A2_part1(engine_coeff, Orders, cal_type=cal_type)
+            ob = rider.SelectOrder(Orders)
+            if ob[0] != None:
+                count = 1
+                theta = 0.05*(0.99**(len(Riders)*t+count))
+                print('theta {} :: 예상 고객 {} 라이더 선택 고객 {}'.format(theta,exp_order , Orders[ob[0]].name))
+                if exp_order == Orders[ob[0]].name:
+                    print('일치')
+                    for index in range(len(engine_coeff)):
+                        #engine_coeff[index] -= theta
+                        engine_coeff[index] = engine_coeff[index]*(1- theta)
+                        pass
+                else:
+                    print('불일치')
+                    for index in range(len(engine_coeff)):
+                        #engine_coeff[index] += theta
+                        engine_coeff[index] = engine_coeff[index] * (1 + theta)
+                        pass
+                for order_name in Orders:
+                    Orders[order_name].subsidy = 0
+                    pass
+                count += 1
+                print('ITE {} 목표 {} 현재 {}'.format(t, Riders[0].coeff_vector, engine_coeff))
+        #input('A2 확인')
+    f = open("A1andA2_res.txt", 'a')
+    info = '목표 {};A1 종료 후 ;{}; A2 종료 후; {} ;{}'.format(Riders[0].coeff_vector,init_engine, engine_coeff,  '\n')
+    f.write(info)
+    f.close()
+    #input('A2 정지')
+    """
+    #print('reverse_Search 클러스터 {} : 남은 해들 {}'.format(reverse_Search, list(engine_reverse.nets.keys())))
     input('정지')
 
     vectors = []
@@ -607,4 +681,7 @@ for ITE_num in range(1):
     f = open("StepWise.txt", 'a')
     info = '{};{};{};{};{};{} {}'.format(ITE_num,Riders[0].coeff_vector[0],Riders[0].coeff_vector[1],cluster[0],cluster[1],res_dist,'\n')
     f.write(info)
-    f.close()
+    f.close()    
+    """
+
+
