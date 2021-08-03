@@ -24,7 +24,7 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple', wait_para = False):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1):
         self.name = i
         self.env = env
         self.resource = simpy.Resource(env, capacity=1)
@@ -54,7 +54,8 @@ class Rider(object):
         self.single_store_wait = [] #일반 주문에 의해 발생한 대기 시간
         self.onhand_order_indexs = []
         self.decision_moment = []
-        env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type))
+        self.exp_error = exp_error
+        env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
 
 
     def RiderMoving(self, env, time):
@@ -67,7 +68,7 @@ class Rider(object):
         #print('현재1 T:{} 라이더{} 가게 {} 도착'.format(int(env.now),self.name, info ))
 
 
-    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2, freedom = True, order_select_type = 'simple'):
+    def RunProcess(self, env, platform, customers, stores,p2 = 0, wait_time = 2, freedom = True, order_select_type = 'simple', uncertainty = False):
         """
         라이더의 행동 과정을 정의.
         1)주문 선택
@@ -92,7 +93,7 @@ class Rider(object):
                     yield req  # users에 들어간 이후에 작동
                     print('T: {} 라이더 : {} 노드 {} 이동 시작 예상 시간{}'.format(int(env.now), self.name, node_info, move_t))
                     if node_info[1] == 0: #가게인 경우
-                        yield env.process(stores[store_name].Cook(env, order)) & env.process(self.RiderMoving(env, move_t))
+                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0])) & env.process(self.RiderMoving(env, move_t))
                         if self.wait_para == True:
                             wait_at_store = round(env.now - order.time_info[1],2)
                             if order.cook_time > wait_at_store:
@@ -155,7 +156,7 @@ class Rider(object):
                         uppicked_order_num += 1
                 print('플랫폼의 주문 수 {}/ 대기 중인 주문 수 {}'.format(len(platform.platform),uppicked_order_num))
                 self.candidates.append(len(platform.platform))
-                order_info = self.OrderSelect(platform, customers, p2 = p2, score_type= order_select_type) #todo : 라이더의 선택 과정
+                order_info = self.OrderSelect(platform, customers, p2 = p2, score_type= order_select_type, uncertainty = uncertainty) #todo : 라이더의 선택 과정
                 #t2 = time.time()
                 #elapsed_time = t2 - t1
                 #print(f"처리시간：{elapsed_time}")
@@ -189,7 +190,7 @@ class Rider(object):
                         print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - wait_time, int(env.now)))
 
 
-    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7):
+    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False):
         """
         라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
         1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
@@ -226,7 +227,7 @@ class Rider(object):
             for info in bound_order_names[:self.bound]: #todo : route의 시작 위치와 자신의 위치사이의 거리가 가까운 bound개의 주문 중 선택.
                 order = platform.platform[info[0]]
                 if score_type == 'oracle':
-                    route_info = self.ShortestRoute(order, customers, p2=p2)
+                    route_info = self.ShortestRoute(order, customers, p2=p2, uncertainty = uncertainty)
                     #route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
                     if len(route_info) > 0:
                         benefit = order.fee / route_info[5]  # 이익 / 운행 시간
@@ -262,7 +263,7 @@ class Rider(object):
             return None
 
 
-    def ShortestRoute(self, order, customers, now_t = 0, p2 = 0, M = 1000):
+    def ShortestRoute(self, order, customers, now_t = 0, p2 = 0, M = 1000, uncertainty = False):
         """
         order를 수행할 수 있는 가장 짧은 경로를 계산 후, 해당 경로의 feasible 여/부를 계산
         반환 값 [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
@@ -365,7 +366,7 @@ class Rider(object):
                 # todo: FLT_Calculate 가 모든 형태의 경로에 대한 고려가 가능한기 볼 것.
                 #print('FTL계산시작')
                 t1 = time.time()
-                ftd_feasiblity, ftds = Basic.FLT_Calculate(order_customers, customers, route,  p2, except_names = already_served_customer_names, M=M, speed=self.speed, now_t=now_t)
+                ftd_feasiblity, ftds = Basic.FLT_Calculate(order_customers, customers, route,  p2, except_names = already_served_customer_names, M=M, speed=self.speed, now_t=now_t, uncertainty = uncertainty, exp_error = self.exp_error)
                 #print('FTL계산종료')
                 t2 = time.time()
                 #print(f"FTL계산종료 itertools.permutations 처리시간：{t2 - t1}")
@@ -373,7 +374,7 @@ class Rider(object):
                     # print('ftds',ftds)
                     # input('멈춤5')
                     #route_time = Basic.RouteTime(order_customers, route, speed=speed, M=M)
-                    route_time = Basic.RouteTime(order_customers, list(route_part), speed=self.speed, M=M)
+                    route_time = Basic.RouteTime(order_customers, list(route_part), speed=self.speed, M=M, uncertainty=uncertainty, error = self.exp_error)
                     #feasible_routes.append([route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time])
                     #route_time = Basic.RouteTime(order_customers, list(route_part), speed=speed, M=M)
                     rev_route = []
@@ -527,6 +528,8 @@ class Store(object):
                 cooking_time = self.order_ready_time
             elif cooking_time_type == 'random':
                 cooking_time = random.randrange(1,self.order_ready_time)
+            elif cooking_time_type == 'uncertainty':
+                cooking_time = customer.cook_time
             else:
                 cooking_time = 1
             print('T :{} 가게 {}, {} 분 후 주문 {} 조리 완료'.format(int(env.now),self.name,cooking_time,customer.name))
@@ -539,7 +542,7 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = [2,5]):
+    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = [2,5], cook_info = [None, None]):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -554,10 +557,12 @@ class Customer(object):
         self.who_serve = []
         self.distance = Basic.distance(input_location, store_loc)
         self.p2 = p2
-        self.cook_time = random.randrange(cooking_time[0],cooking_time[1])
+        self.cook_time = cooking_time
         self.inbundle = False
         self.rider_wait = 0
         self.in_bundle_time = None
+        self.cook_info = cook_info
+        self.exp_info = [None,None,None]
         #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):

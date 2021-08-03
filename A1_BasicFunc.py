@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 import math
 import random
+
+import numpy.random
+
 import A1_Class as Class
 import time
 
@@ -16,7 +19,7 @@ def distance(p1, p2):
     return round(euc_dist,4)
 
 
-def RouteTime(orders, route, M = 1000, speed = 1):
+def RouteTime(orders, route, M = 1000, speed = 1, uncertainty = False, error = 1):
     """
     Time to move the route with speed
     :param orders: order in route
@@ -44,9 +47,22 @@ def RouteTime(orders, route, M = 1000, speed = 1):
         bf = route[index-1]
         bf_loc = locs[bf][0]
         af = route[index]
-        #print(bf,af)
+        #print(1, bf,af,time)
         af_loc = locs[af][0]
         time += distance(bf_loc,af_loc)/speed + locs[af][2]
+        if af > M:
+            for order in orders:
+                if order.name == af - M:
+                    target = order
+            #print(2, bf, af, time,target.cook_info,uncertainty)
+            if uncertainty == True and target.cook_info[0] == 'uncertainty': #todo : 추가 시간이 발생할 수 있음을 반영
+                pool = numpy.random.normal(target.cook_info[1][0], target.cook_info[1][1]*error, 1000)
+                exp_cook_time = random.choice(pool)
+                if exp_cook_time > time:
+                    #print('추가시간', exp_cook_time - time)
+                    time += exp_cook_time - time
+                #input('작동 확인1')
+        #input('작동 확인2')
         """
         print('정보', bf, af, af - M)
         print('고려 고객들', orders)
@@ -60,7 +76,7 @@ def RouteTime(orders, route, M = 1000, speed = 1):
     return round(time,4)
 
 
-def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 1000, speed = 1, now_t = 0):
+def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 1000, speed = 1, now_t = 0, uncertainty = False, exp_error = 1):
     """
     Calculate the customer`s Food Delivery Time in route(bundle)
 
@@ -91,9 +107,10 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
                 s = route.index(order_name + M)
                 e = route.index(order_name)
                 try:
-                    ftd = RouteTime(customer_in_order, route[s: e + 1], speed=speed, M=M)
+                    ftd = RouteTime(customer_in_order, route[s: e + 1], speed=speed, M=M, uncertainty=uncertainty, error = exp_error)
                 except:
-                    print('경로 {}'.format(route))
+                    ftd = 1000
+                    print('경로 {}, s:{}, e :{}'.format(route,s,e))
                     print('경로 시간 계산 에러/ 현재고객 {}/ 경로 고객들 {}'.format(order_name,names))
                     input('중지')
             except:
@@ -110,7 +127,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     return True, ftds
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple', wait_para = False):
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -126,7 +143,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para)
+        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
         Rider_dict[rider_num] = single_rider
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
         print('라이더 {} 생성. T {}'.format(rider_num, int(env.now)))
@@ -141,7 +158,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 
-def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15, p2_set = False, speed = 4, cooking_time = [2,5]):
+def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15, p2_set = False, speed = 4, cooking_time = [2,5], cook_time_type = 'random'):
     """
     Generate customer order
     :param env: Simpy Env
@@ -162,7 +179,15 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
             input_location = history[name][2]
             store_num = history[name][1]
             interval = history[name + 1][0] - history[name][0]
-        order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2, cooking_time = cooking_time)
+        if cook_time_type == 'random':
+            cook_time = random.randrange(cooking_time[0],cooking_time[1])
+        else:
+            pool = numpy.random.normal(cooking_time[0],cooking_time[1], 1000)
+            cook_time = round(random.choice(pool),4)
+        if cook_time < 0:
+            input('조리 시간 음수 {}/ 생성 정보 {}'.format(cook_time,cooking_time))
+        order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2, cooking_time = cook_time, cook_info = [cook_time_type, cooking_time])
+        #input('주문 {} 정보 {}'.format(order.name, order.cook_info))
         if p2_set == True:
             if type(p2) == list:
                 selected_p2 = random.choices(population=p2[0],weights=p2[1],k=1)

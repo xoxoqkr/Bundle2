@@ -2,6 +2,9 @@
 
 import simpy
 import random
+
+from astropy import uncertainty
+
 from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave
 from A1_Class import Store, Platform_pool
 from A2_Func import Platform_process, ResultPrint
@@ -14,8 +17,11 @@ order_interval = 1.1
 interval = 5
 run_time = 150
 cool_time = 30 #run_time - cool_time 시점까지만 고객 생성
-
-
+uncertainty_para = True #음식 주문 불확실성 고려
+rider_exp_error = 1.5 #라이더가 가지는 불확실성
+platform_exp_error = 1.2 #플랫폼이 가지는 불확실성
+cook_time_type = 'uncertainty'
+cooking_time = [7,1] #[평균, 분산]
 thres_p = 1
 
 rider_working_time = 120
@@ -35,7 +41,6 @@ p2 = 3 #p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #
 #order_p2 = [[1.5,2,3],[0.3,0.3,0.4]] #음식 별로 민감도가 차이남.
 order_p2 = 3
 wait_para = True #True: 음식조리로 인한 대기시간 발생 #False : 음식 대기로 인한 대기시간 발생X
-cooking_time = [7,10]
 
 
 
@@ -86,11 +91,11 @@ for ite in range(ITE_NUM):
             Store_dict[store_name] = store
         env.process(RiderGenerator(env, Rider_dict, Platform2, Store_dict, Orders, speed=rider_speed,
                                    interval=rider_gen_interval, runtime=run_time, gen_num=rider_num,
-                                   capacity=rider_capacity, history= rider_history, score_type= score_type, wait_para= wait_para))
-        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime= run_time - cool_time, p2 = order_p2, p2_set= p2_set, speed= rider_speed, cooking_time = cooking_time))
+                                   capacity=rider_capacity, history= rider_history, score_type= score_type, wait_para= wait_para, uncertainty = uncertainty_para, exp_error = rider_exp_error))
+        env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime= run_time - cool_time, p2 = order_p2, p2_set= p2_set, speed= rider_speed, cooking_time = cooking_time, cook_time_type= cook_time_type))
         if sc.platform_work == True:
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
-                                         end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option))
+                                         end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed)
         sc.res.append(res)

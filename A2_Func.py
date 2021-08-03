@@ -181,7 +181,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     return res
 
 
-def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, option = False):
+def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, option = False, uncertainty = False, platform_exp_error =  1):
     """
     Construct bundle consists of orders
     :param orders: customer order in the route. type: customer class
@@ -231,10 +231,10 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
                 sequence_feasiblity = False
                 break
         if sequence_feasiblity == True:
-            ftd_feasiblity, ftds = FLT_Calculate(orders, customers, route, p2, [],M = M ,speed = speed)
+            ftd_feasiblity, ftds = FLT_Calculate(orders, customers, route, p2, [],M = M ,speed = speed, uncertainty =uncertainty, exp_error=platform_exp_error)
             #customer_in_order, customers, route, p2, except_names, M = 1000, speed = 1, now_t = 0
             if ftd_feasiblity == True:
-                route_time = RouteTime(orders, route, speed=speed, M=M)
+                route_time = RouteTime(orders, route, speed=speed, M=M, uncertainty = uncertainty, error = platform_exp_error)
                 feasible_routes.append([route, round(max(ftds), 2), round(sum(ftds) / len(ftds), 2), round(min(ftds), 2), order_names,round(route_time, 2)])
                 #print('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(route_time, time_thres))
                 #if route_time < time_thres :
@@ -303,7 +303,7 @@ def GraphDraw(infos, customers, M = 1000):
 
 
 
-def ConstructBundle(orders, s, n, p2, speed = 1, option = False):
+def ConstructBundle(orders, s, n, p2, speed = 1, option = False, uncertainty = False, platform_exp_error = 1):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -338,7 +338,7 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False):
             for name in q:
                 subset_orders.append(orders[name])
                 time_thres += orders[name].distance/speed
-            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres)
+            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error)
             if len(tem_route_info) > 0:
                 b.append(tem_route_info)
         if len(b) > 0:
@@ -541,7 +541,7 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
     print('실려있는 고객 {}'.format(print2))
     return rev_order
 
-def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False):
+def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1):
     B2 = []
     B3 = []
     while env.now <= end_t:
@@ -567,7 +567,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
             if b3 > 0:
                 print("B3 처리 시작")
                 t1 = time.time()
-                b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed, option = option)
+                b3_bundle = ConstructBundle(rev_order, 3, b3, p2, speed = speed, option = option , uncertainty = uncertainty, platform_exp_error = platform_exp_error)
                 t2 = time.time()
                 print(f"B3 처리시간：{t2 - t1}")
                 # b3_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
@@ -576,7 +576,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 b2 = int((b3 - len(B3))*1.5)
                 print("B2 처리 시작")
                 t1 = time.time()
-                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed, option = option)
+                b2_bundle = ConstructBundle(rev_order, 2, b2, p2, speed = speed, option = option, uncertainty = uncertainty, platform_exp_error = platform_exp_error)
                 t2 = time.time()
                 print(f"B2 처리시간：{t2 - t1}")
                 #b2_bundle = [[route, max(ftds), average(ftds), min(ftds), names], ..., ]
