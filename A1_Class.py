@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 
+from scipy.stats import poisson
 import simpy
 import operator
 import itertools
 import random
 import A1_BasicFunc as Basic
 import time
-
+import numpy
 
 
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -27,8 +28,9 @@ class Rider(object):
     def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1):
         self.name = i
         self.env = env
+        self.gen_time = int(env.now)
         self.resource = simpy.Resource(env, capacity=1)
-        self.visited_route = [[-1, -1, [25,25], int(env.now)]]
+        self.visited_route = [[-1, -1, [25, 25], int(env.now)]]
         self.speed = speed
         self.route = []
         self.run_process = None
@@ -36,7 +38,7 @@ class Rider(object):
         self.onhand = []
         self.picked_orders = []
         self.end_t = env.now + end_t
-        self.last_departure_loc = [25,25]
+        self.last_departure_loc = [25, 25]
         self.container = []
         self.served = []
         self.p2 = p2
@@ -50,8 +52,8 @@ class Rider(object):
         self.wait_para = wait_para
         self.store_wait = 0
         self.num_bundle_customer = 0
-        self.bundle_store_wait = [] #번들에 속한 주문들에 의해 발생한 대기 시간
-        self.single_store_wait = [] #일반 주문에 의해 발생한 대기 시간
+        self.bundle_store_wait = [] # 번들에 속한 주문들에 의해 발생한 대기 시간
+        self.single_store_wait = [] # 일반 주문에 의해 발생한 대기 시간
         self.onhand_order_indexs = []
         self.decision_moment = []
         self.exp_error = exp_error
@@ -93,9 +95,46 @@ class Rider(object):
                     yield req  # users에 들어간 이후에 작동
                     print('T: {} 라이더 : {} 노드 {} 이동 시작 예상 시간{}'.format(int(env.now), self.name, node_info, move_t))
                     if node_info[1] == 0: #가게인 경우
-                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0])) & env.process(self.RiderMoving(env, move_t))
+                        exp_store_arrive = env.now + move_t
+                        if order.type == 'single_order':
+                            pool = numpy.random.normal(order.cook_info[1][0], order.cook_info[1][1] * self.exp_error, 1000)
+                            order.rider_exp_cook_time = random.choice(pool)
+                            exp_cook_time = order.rider_exp_cook_time
+                        else:  # 'bundle'
+                            exp_cook_time = order.platform_exp_cook_time
+                        wait_at_store, food_wait, manual_cook_time = WaitTimeCal1(exp_store_arrive, order.time_info[1], exp_cook_time, order.cook_time,move_t = move_t)
+                        ##결과 저장 부##
+                        self.store_wait += wait_at_store
+                        order.rider_wait = wait_at_store
+                        order.food_wait = food_wait
+                        if order.inbundle == True:
+                            self.bundle_store_wait.append(wait_at_store)
+                        else:
+                            self.single_store_wait.append(wait_at_store)
+                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0], manual_cook_time = manual_cook_time)) & env.process(self.RiderMoving(env, move_t))
+                        """
+                        ##필요 없는 부분 시작 ###
+                        exp_store_arrive = env.now + move_t
+                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0], manual_cook_time = manual_cook_time)) & env.process(self.RiderMoving(env, move_t))
                         if self.wait_para == True:
-                            wait_at_store = round(env.now - order.time_info[1],2)
+                            if order.type == 'single_order':
+                                pool = numpy.random.normal(order.cook_info[1][0], order.cook_info[1][1] * self.exp_error, 1000)
+                                order.rider_exp_cook_time = random.choice(pool)
+                                exp_cook_time = order.rider_exp_cook_time
+                                if exp_store_arrive > order.time_info[1] + exp_cook_time:
+                                    wait_at_store = 0
+                                    food_wait = exp_store_arrive - (order.time_info[1] + exp_cook_time)
+                                else:
+                                    wait_at_store = (order.time_info[1] + exp_cook_time) - exp_store_arrive
+                                    food_wait = 0
+                            else: #'bundle'
+                                exp_cook_time = order.platform_exp_cook_time
+                                if exp_store_arrive > order.time_info[1] + exp_cook_time:
+                                    wait_at_store = 0
+                                    food_wait = exp_store_arrive - (order.time_info[1] + exp_cook_time)
+                                else:
+                                    wait_at_store = (order.time_info[1] + exp_cook_time) - exp_store_arrive
+                                    food_wait = 0
                             if order.cook_time > wait_at_store:
                                 yield env.timeout(wait_at_store)
                                 self.store_wait += wait_at_store
@@ -105,10 +144,13 @@ class Rider(object):
                             if order.inbundle == True:
                                 self.bundle_store_wait.append(wait_at_store)
                             else:
-                                self.single_store_wait.append(wait_at_store)
+                                self.single_store_wait.append(wait_at_store)                        
+                        ##필요 없는 부분 종료###
+                        """
                         print('T:{} 라이더{} 고객{}을 위해 가게 {} 도착'.format(int(env.now), self.name, customers[node_info[0]].name,customers[node_info[0]].store))
                         self.container.append(node_info[0])
                         order.time_info[2] = env.now
+                        order.time_info[8] = exp_store_arrive
                         #input('가게 도착')
                     else:#고객인 경우
                         #input('T: {} 고객 {} 이동 시작'.format(int(env.now),node_info[0]))
@@ -190,7 +232,7 @@ class Rider(object):
                         print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - wait_time, int(env.now)))
 
 
-    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False):
+    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None):
         """
         라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
         1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
@@ -200,7 +242,6 @@ class Rider(object):
         @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
         @param p2: 허용 Food Lead Time의 최대 값
         @param sort_standard: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
-        @param bound: 선택할 수 있는 주문 중 라이더가 고려할 수 있는 주문의 수
         @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
         """
         score = []
@@ -212,10 +253,14 @@ class Rider(object):
             #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
             if order.picked == False:
                 #if ((len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num)) or (len(order.route) > 2 and len(self.onhand) < 3):
-                if len(self.picked_orders) <= self.max_order_num:
+                if Basic.ActiveRiderCalculator(self) == True:
+                #if len(self.picked_orders) <= self.max_order_num:
                     if type(order.route[0]) != list:
                         input('에러 확인 {} : {}'.format(self.last_departure_loc,order.route))
-                    dist = Basic.distance(self.last_departure_loc, order.route[0][2])/self.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
+                    if current_loc != None:
+                        dist = Basic.distance(current_loc, order.route[0][2]) / self.speed
+                    else:
+                        dist = Basic.distance(self.last_departure_loc, order.route[0][2])/self.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
                     info = [order.index,dist]
                     bound_order_names.append(info)
                 #elif len(order.route) > 2: #번들이라는 소리
@@ -272,7 +317,6 @@ class Rider(object):
         @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
         @param now_t: 현재 시간
         @param p2: 허용 Food Lead Time의 최대 값
-        @param speed: 차량 속도
         @param M: 가게와 고객을 구분하는 임의의 큰 수
         @return: 최단 경로 정보 -> [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
         """
@@ -420,6 +464,7 @@ class Rider(object):
             customers[name].time_info[1] = now_t
             if len(names) > 1:
                 customers[name].inbundle = True
+                customers[name].type = 'bundle'
             #print('주문 {}의 고객 {} 가게 위치{} 고객 위치{}'.format(order.index, name, customers[name].store_loc, customers[name].location))
         #print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
         if route[0][1] != 0:
@@ -430,12 +475,24 @@ class Rider(object):
         self.picked_orders.append([order.index, names])
         print('라이더 {} 수정후 경로 {}/ 보유 고객 {}'.format(self.name, self.route, self.onhand))
 
+
+    def select_pr(self, t):
+        # t분 이내에 주문을 선택을 할 확률을 반환
+        mu = (1.0/self.search_lamda)*t
+        x = 0
+        return round(1 - poisson.pmf(x, mu),4) # 주문을 1번이상 수행할 확률
+
+
+    def CurrentLoc(self):
+        pass
+
+
 class Store(object):
     """
     Store can received the order.
     Store has capacity. The order exceed the capacity must be wait.
     """
-    def __init__(self, env, platform, name, loc = [25,25], order_ready_time = 7, capacity = 6, slack = 2, print_para = True):
+    def __init__(self, env, platform, name, loc = (25,25), order_ready_time = 7, capacity = 6, slack = 2, print_para = True):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.location = loc
         self.order_ready_time = order_ready_time
@@ -512,7 +569,7 @@ class Store(object):
         #print("T",int(env.now),"접수 된 주문", self.received_orders)
 
 
-    def Cook(self, env, customer, cooking_time_type = 'fixed'):
+    def Cook(self, env, customer, cooking_time_type = 'fixed', manual_cook_time = None):
         """
         Occupy the store capacity and cook the order
         :param env: simpy Env
@@ -531,9 +588,12 @@ class Store(object):
             elif cooking_time_type == 'uncertainty':
                 cooking_time = customer.cook_time
             else:
-                cooking_time = 1
+                cooking_time = 0.001
             print('T :{} 가게 {}, {} 분 후 주문 {} 조리 완료'.format(int(env.now),self.name,cooking_time,customer.name))
-            yield env.timeout(cooking_time)
+            if manual_cook_time == None:
+                yield env.timeout(cooking_time)
+            else:
+                yield env.timeout(manual_cook_time)
             #print(self.resource.users)
             print('T :{} 가게 {} 주문 {} 완료'.format(int(env.now),self.name,customer.name))
             customer.food_ready = True
@@ -542,11 +602,11 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = [2,5], cook_info = [None, None]):
+    def __init__(self, env, name, input_location, store = 0, store_loc = (25, 25),end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = (2,5), cook_info = (None, None)):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
-        self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
+        self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time, None]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
-        # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
+        # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게 출발 시간),7: 고객에게 서비스 하는 시간, 8: 가게 도착 시간]
         self.location = input_location
         self.store_loc = store_loc
         self.store = store
@@ -563,9 +623,93 @@ class Customer(object):
         self.in_bundle_time = None
         self.cook_info = cook_info
         self.exp_info = [None,None,None]
+        self.rider_exp_cook_time = None
+        self.platform_exp_cook_time = None
+        self.food_wait = None
         #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):
     def __init__(self):
         self.platform = {}
         self.info = []
+
+
+def WaitTimeCal1(exp_store_arrive_t, assign_t, exp_cook_time, cook_time, move_t = 0):
+    exp_food_ready_t = assign_t + exp_cook_time
+    actual_food_ready_time = assign_t + cook_time
+    if exp_store_arrive_t > exp_food_ready_t: #조리 시간에 여유가 있다면, 미이 주문을 실시
+        #wait_at_store = 0
+        food_wait = exp_store_arrive_t - exp_food_ready_t
+        manual_cook_time = 0.001  # 거의 존재하지 않는다는 의미.
+        if actual_food_ready_time > exp_store_arrive_t:
+            wait_at_store = actual_food_ready_time - exp_store_arrive_t
+            food_wait = 0
+            manual_cook_time = wait_at_store + move_t
+        elif exp_store_arrive_t >= actual_food_ready_time >= exp_food_ready_t:
+            wait_at_store =0
+            food_wait = exp_store_arrive_t - actual_food_ready_time
+            manual_cook_time = 0.001
+        elif exp_food_ready_t >= actual_food_ready_time:
+            wait_at_store = 0
+            food_wait = exp_store_arrive_t - actual_food_ready_time
+            manual_cook_time = 0.001
+        else:
+            input('시간 관계 문제 발생1 ::actual_food_ready_time {}:: exp_store_arrive_t {} :: exp_food_ready_t{} '.format(actual_food_ready_time, exp_store_arrive_t, exp_food_ready_t))
+    else:#조리 시간에 여유가 없다면, 가게에서 대기
+        wait_at_store = exp_food_ready_t - exp_store_arrive_t
+        food_wait = 0
+        manual_cook_time = move_t + wait_at_store
+        if actual_food_ready_time > exp_food_ready_t:
+            wait_at_store = actual_food_ready_time - exp_store_arrive_t
+            food_wait = 0
+            manual_cook_time = wait_at_store + move_t
+        elif exp_food_ready_t >= actual_food_ready_time >= exp_store_arrive_t:
+            wait_at_store = actual_food_ready_time - exp_store_arrive_t
+            food_wait = 0
+            manual_cook_time = wait_at_store + move_t
+        elif exp_store_arrive_t >= actual_food_ready_time:
+            wait_at_store = 0
+            food_wait = exp_store_arrive_t - actual_food_ready_time
+            manual_cook_time = 0.001
+        else:
+            input('시간 관계 문제 발생2 ::actual_food_ready_time {}:: exp_store_arrive_t {} :: exp_food_ready_t{} '.format(actual_food_ready_time, exp_store_arrive_t, exp_food_ready_t))
+    return wait_at_store, food_wait, manual_cook_time
+
+
+def WaitTimeCal0(exp_store_arrive_t, assign_t, exp_cook_time, cook_time, move_t = 0):
+    exp_food_ready_t = assign_t + exp_cook_time
+    actual_food_ready_time = assign_t + cook_time
+    if exp_store_arrive_t > exp_food_ready_t: #조리 시간에 여유가 있다면, 미이 주문을 실시
+        wait_at_store = 0
+        food_wait = exp_store_arrive_t - exp_food_ready_t
+        manual_cook_time = 0.001  # 거의 존재하지 않는다는 의미.
+    else:#조리 시간에 여유가 없다면, 가게에서 대기
+        wait_at_store = exp_food_ready_t - exp_store_arrive_t
+        food_wait = 0
+        manual_cook_time = move_t + wait_at_store
+    return wait_at_store, food_wait, manual_cook_time
+
+
+
+def WaitTimeCal2(exp_store_arrive_t, exp_food_ready_t, move_t = 0):
+    if exp_store_arrive_t > exp_food_ready_t:
+        wait_at_store = 0
+        food_wait = exp_store_arrive_t - exp_food_ready_t
+        if food_wait < 0:
+            wait_at_store += -food_wait
+            food_wait = 0
+            manual_cook_time = move_t - food_wait
+        else:
+            manual_cook_time = 0.001  # 거의 존재하지 않는다는 의미.
+    else:
+        wait_at_store = exp_food_ready_t - exp_store_arrive_t
+        food_wait = 0
+        if wait_at_store < 0:
+            wait_at_store = 0
+            food_wait += - wait_at_store
+            manual_cook_time = move_t - wait_at_store
+        else:
+            manual_cook_time = move_t + wait_at_store
+    if wait_at_store < 0 or food_wait < 0:
+        pass
+    return wait_at_store, food_wait, manual_cook_time
