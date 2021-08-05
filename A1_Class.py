@@ -6,7 +6,7 @@ import itertools
 import random
 import A1_BasicFunc as Basic
 import time
-
+import numpy
 
 
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -93,9 +93,61 @@ class Rider(object):
                     yield req  # users에 들어간 이후에 작동
                     print('T: {} 라이더 : {} 노드 {} 이동 시작 예상 시간{}'.format(int(env.now), self.name, node_info, move_t))
                     if node_info[1] == 0: #가게인 경우
-                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0])) & env.process(self.RiderMoving(env, move_t))
+                        exp_store_arrive = env.now + move_t
+                        manual_cook_time = None
+                        if order.type == 'single_order':
+                            pool = numpy.random.normal(order.cook_info[1][0], order.cook_info[1][1] * self.error, 1000)
+                            order.rider_exp_cook_time = random.choice(pool)
+                            exp_cook_time = order.rider_exp_cook_time
+                            if exp_store_arrive > order.time_info[1] + exp_cook_time:
+                                wait_at_store = 0
+                                food_wait = exp_store_arrive - (order.time_info[1] + exp_cook_time)
+                                manual_cook_time = 0.01
+                            else:
+                                wait_at_store = (order.time_info[1] + exp_cook_time) - exp_store_arrive
+                                food_wait = 0
+                                manual_cook_time = move_t + wait_at_store
+                        else:  # 'bundle'
+                            exp_cook_time = order.platform_exp_cook_time
+                            if exp_store_arrive > order.time_info[1] + exp_cook_time:
+                                wait_at_store = 0
+                                food_wait = exp_store_arrive - (order.time_info[1] + exp_cook_time)
+                                manual_cook_time = 0.01
+                            else:
+                                wait_at_store = (order.time_info[1] + exp_cook_time) - exp_store_arrive
+                                food_wait = 0
+                        ##결과 저장 부##
+                        self.store_wait += wait_at_store
+                        order.rider_wait = wait_at_store
+                        order.food_wait = food_wait
+                        if order.inbundle == True:
+                            self.bundle_store_wait.append(wait_at_store)
+                        else:
+                            self.single_store_wait.append(wait_at_store)
+                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0], manual_cook_time = manual_cook_time)) & env.process(self.RiderMoving(env, move_t))
+
+                        exp_store_arrive = env.now + move_t
+                        yield env.process(stores[store_name].Cook(env, order, order.cook_info[0], manual_cook_time = manual_cook_time)) & env.process(self.RiderMoving(env, move_t))
                         if self.wait_para == True:
-                            wait_at_store = round(env.now - order.time_info[1],2)
+                            if order.type == 'single_order':
+                                pool = numpy.random.normal(order.cook_info[1][0], order.cook_info[1][1] * self.error, 1000)
+                                order.rider_exp_cook_time = random.choice(pool)
+                                exp_cook_time = order.rider_exp_cook_time
+                                if exp_store_arrive > order.time_info[1] + exp_cook_time:
+                                    wait_at_store = 0
+                                    food_wait = exp_store_arrive - (order.time_info[1] + exp_cook_time)
+                                else:
+                                    wait_at_store = (order.time_info[1] + exp_cook_time) - exp_store_arrive
+                                    food_wait = 0
+                            else: #'bundle'
+                                exp_cook_time = order.platform_exp_cook_time
+                                if exp_store_arrive > order.time_info[1] + exp_cook_time:
+                                    wait_at_store = 0
+                                    food_wait = exp_store_arrive - (order.time_info[1] + exp_cook_time)
+                                else:
+                                    wait_at_store = (order.time_info[1] + exp_cook_time) - exp_store_arrive
+                                    food_wait = 0
+
                             if order.cook_time > wait_at_store:
                                 yield env.timeout(wait_at_store)
                                 self.store_wait += wait_at_store
@@ -106,9 +158,11 @@ class Rider(object):
                                 self.bundle_store_wait.append(wait_at_store)
                             else:
                                 self.single_store_wait.append(wait_at_store)
+
                         print('T:{} 라이더{} 고객{}을 위해 가게 {} 도착'.format(int(env.now), self.name, customers[node_info[0]].name,customers[node_info[0]].store))
                         self.container.append(node_info[0])
                         order.time_info[2] = env.now
+                        order.time_info[8] = exp_store_arrive
                         #input('가게 도착')
                     else:#고객인 경우
                         #input('T: {} 고객 {} 이동 시작'.format(int(env.now),node_info[0]))
@@ -420,6 +474,7 @@ class Rider(object):
             customers[name].time_info[1] = now_t
             if len(names) > 1:
                 customers[name].inbundle = True
+                customers[name].type = 'bundle'
             #print('주문 {}의 고객 {} 가게 위치{} 고객 위치{}'.format(order.index, name, customers[name].store_loc, customers[name].location))
         #print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
         if route[0][1] != 0:
@@ -512,7 +567,7 @@ class Store(object):
         #print("T",int(env.now),"접수 된 주문", self.received_orders)
 
 
-    def Cook(self, env, customer, cooking_time_type = 'fixed'):
+    def Cook(self, env, customer, cooking_time_type = 'fixed', manual_cook_time = None):
         """
         Occupy the store capacity and cook the order
         :param env: simpy Env
@@ -531,9 +586,12 @@ class Store(object):
             elif cooking_time_type == 'uncertainty':
                 cooking_time = customer.cook_time
             else:
-                cooking_time = 1
+                cooking_time = 0.001
             print('T :{} 가게 {}, {} 분 후 주문 {} 조리 완료'.format(int(env.now),self.name,cooking_time,customer.name))
-            yield env.timeout(cooking_time)
+            if manual_cook_time == None:
+                yield env.timeout(cooking_time)
+            else:
+                yield env.timeout(manual_cook_time)
             #print(self.resource.users)
             print('T :{} 가게 {} 주문 {} 완료'.format(int(env.now),self.name,customer.name))
             customer.food_ready = True
@@ -544,9 +602,9 @@ class Store(object):
 class Customer(object):
     def __init__(self, env, name, input_location, store = 0, store_loc = [25,25],end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = [2,5], cook_info = [None, None]):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
-        self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time]
+        self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time, None]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
-        # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
+        # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게 출발 시간),7: 고객에게 서비스 하는 시간, 8: 가게 도착 시간]
         self.location = input_location
         self.store_loc = store_loc
         self.store = store
@@ -563,6 +621,9 @@ class Customer(object):
         self.in_bundle_time = None
         self.cook_info = cook_info
         self.exp_info = [None,None,None]
+        self.rider_exp_cook_time = None
+        self.platform_exp_cook_time = None
+        self.food_wait = None
         #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):

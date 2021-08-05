@@ -40,7 +40,7 @@ p2_set = True
 p2 = 3 #p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
 #order_p2 = [[1.5,2,3],[0.3,0.3,0.4]] #음식 별로 민감도가 차이남.
 order_p2 = 3
-wait_para = True #True: 음식조리로 인한 대기시간 발생 #False : 음식 대기로 인한 대기시간 발생X
+wait_para = False #True: 음식조리로 인한 대기시간 발생 #False : 음식 대기로 인한 대기시간 발생X
 
 
 
@@ -59,6 +59,7 @@ f.close()
 
 #infos = [['A',False, False],['B',True, True],['C',True, False]]
 infos = [['A',False, False],['B',True, True],['C',True, False]]
+#infos = [['B',True, True]]
 for info in infos:
     sc = scenario(info[0], info[1], info[2])
     scenarios.append(sc)

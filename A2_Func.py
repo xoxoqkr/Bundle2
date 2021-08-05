@@ -6,6 +6,8 @@ from A1_Class import Order
 import time
 import matplotlib.pyplot as plt
 import numpy as np
+import random
+
 
 def CustomerValueForRiderCalculator(rider, customer):
     """
@@ -423,7 +425,7 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     return idle_riders, len(interval_riders)
 
 
-def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0):
+def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0, platform_exp_error = 1):
     """
     Construct unpicked_orders with bundled customer
     :param bundles: constructed bundles
@@ -439,6 +441,8 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
         bundle_names += info[4]
         if len(info[4]) == 1:
             customer = customer_set[info[4][0]]
+            pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
+            customer.platform_exp_cook_time = random.choice(pool)
             route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
             o = Order(order_index, info[4][0], route, 'single', fee = customer.fee)
         else:
@@ -456,6 +460,8 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
             for customer_name in info[4]:
                 fee += customer_set[customer_name].fee #주문의 금액 더하기.
                 customer_set[customer_name].in_bundle_time = now_t
+                pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
+                customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
             o = Order(order_index, info[4], route, 'bundle', fee = fee)
         o.average_ftd = info[2]
         res[order_index] = o
@@ -600,7 +606,7 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
                 bundle_names += platform_set.platform[index].customers
                 #print('2 order index : {} added : {}'.format(order.index,order.customers))
             print('고객 이름들 2 :: {}'.format(list(bundle_names)))
-            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2)) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
+            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2), platform_exp_error = platform_exp_error) #todo: 이번에 구성되지 않은 단번 주문은 바로 플랫폼에 계시.
             bundle_names = []
             for index in new_orders:
                 bundle_names += new_orders[index].customers

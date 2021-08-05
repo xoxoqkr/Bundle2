@@ -274,16 +274,16 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
         #print('평균 주문간격{}'.format(decision_moment))
         info = [rider_name, len(rider.served), rider.idle_time, rider.b_select,rider.num_bundle_customer, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,decision_moment,rider.visited_route]
         rider_infos.append(info)
-    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 도착 시점','고객 도착 시점','음식 대기시간','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간','번들로 구성된 시점']
+    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 출발 시점','고객 도착 시점','가게 도착 시점','음식조리시간','차량 대기시간','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간','번들로 구성된 시점']
     customer_infos = [sub, customer_header]
     for customer_name in Customers:
         customer = Customers[customer_name]
         wait_t = None
         try:
-            wait_t = customer.ready_time - customer.time_info[2]
+            wait_t = customer.ready_time - customer.time_info[8] #음식이 준비된 시간 - 가게에 도착한 시간.
         except:
             pass
-        info = [customer_name] + customer.time_info[:4] + [wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait,customer.in_bundle_time]
+        info = [customer_name] + customer.time_info[:4] +[customer.time_info[8]]+[customer.cook_time]+ [wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait,customer.in_bundle_time]
         customer_infos.append(info)
     f = open(title + "riders.txt", 'a')
     for info in rider_infos:
