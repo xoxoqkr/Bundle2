@@ -103,7 +103,8 @@ def BundleScoreSimulator(riders, platform, orders, stores, w, t_now):
     return round(sum(e),4), round(sum(d),4)
 
 
-def BundleSimulator(riders, orders, platform, bundles, stores, t_now, sample_size = 1000):
+def BundleSimulator(riders, orders, platform, bundle_infos, stores, t_now, sample_size = 1000):
+    # bundle_infos = [route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names, round(route_time,2), s_b]
     # s_b 계산
     s = []
     for bundle in bundles:
@@ -126,7 +127,66 @@ def BundleSimulator(riders, orders, platform, bundles, stores, t_now, sample_siz
         #pareto count로 결정하기. 대체품
     return None
 
-def ConstructBundle(orders, s, n, p2, speed = 1, option = False, uncertainty = False, platform_exp_error = 1):
+def ConstructBundleTwoSided(target_order, orders, s, p2, speed = 1, option = False, uncertainty = False, platform_exp_error = 1):
+    """
+    Construct s-size bundle pool based on the customer in orders.
+    And select n bundle from the pool
+    Required condition : customer`s FLT <= p2
+    :param new_orders: new order genrated during t_bar
+    :param orders: userved customers : [customer class, ...,]
+    :param s: bundle size: 2 or 3
+    :param p2: max FLT
+    :param speed:rider speed
+    :parm option:
+    :parm uncertainty:
+    :parm platform_exp_error:
+    :return: constructed bundle set
+    """
+    for order_name in orders:
+        order = orders[order_name]
+        d = []
+        dist_thres = order.p2
+        dist = distance(target_order.store_loc , order.store_loc) / speed
+        if target_order.name != order.name and dist <= dist_thres:
+            d.append(order.name)
+    M = itertools.permutations(d, s - 1)
+    b = []
+    for m in M:
+        q = list(m) + [target_order.name]
+        subset_orders = []
+        time_thres = 0 #3개의 경로를 연속으로 가는 것 보다는
+        for name in q:
+            subset_orders.append(orders[name])
+            time_thres += orders[name].distance/speed
+        tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_subset = True)
+        if len(tem_route_info) > 0:
+            b.append(tem_route_info)
+    #s_b를 계산하는 부분 추가.
+    #1 OD-pair 계산
+    Q = itertools.permutations(q, s)
+    OD_pair_dist = []
+    for seq in Q:
+        route_dist = 0
+        tem_route = []
+        for name in seq:
+            tem_route += [orders[name].store_loc, orders[name].location]
+        for index in range(1, len(tem_route)):
+            before = tem_route[index-1]
+            after = tem_route[index]
+            route_dist += distance(before, after)
+        OD_pair_dist.append(route_dist)
+    OD_pair_dist = min(OD_pair_dist)
+    for info in b:
+        info.append((OD_pair_dist - info[5]/s))
+    b.sort(key = operator.itemgetter(6)) #s_b 순으로 정렬
+    #새로 작성한 함수 사용 가장 좋은 번들을 파악
+    if len(b) > 0:
+        pass
+
+    return selected_bundle
+
+
+def ConstructBundleTwoSided_ORG(orders, s, n, p2, speed = 1, option = False, uncertainty = False, platform_exp_error = 1):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -136,13 +196,15 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False, uncertainty = F
     :param n: needed bundle number
     :param p2: max FLT
     :param speed:rider speed
+    :parm option:
+    :parm uncertainty:
+    :parm platform_exp_error:
     :return: constructed bundle set
     """
     B = []
     for order_name in orders:
         order = orders[order_name]
         d = []
-        #dist_thres = p2 - distance(order.store_loc, order.location)/speed
         dist_thres = order.p2
         for order2_name in orders:
             order2 = orders[order2_name]
@@ -151,7 +213,6 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False, uncertainty = F
                 d.append(order2.name)
         #M = itertools.combinations(d,s-1)
         M = itertools.permutations(d, s - 1)
-        #print('번들 구성 고려 subset 수 {}'.format(len(list(M))))
         #M = list(M)
         b = []
         for m in M:

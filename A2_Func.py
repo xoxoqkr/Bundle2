@@ -185,7 +185,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     return res
 
 
-def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, option = False, uncertainty = False, platform_exp_error =  1):
+def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, option = False, uncertainty = False, platform_exp_error =  1, feasible_return = False):
     """
     Construct bundle consists of orders
     :param orders: customer order in the route. type: customer class
@@ -242,7 +242,7 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
                 feasible_routes.append([route, round(max(ftds), 2), round(sum(ftds) / len(ftds), 2), round(min(ftds), 2), order_names,round(route_time, 2)])
                 #print('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(route_time, time_thres))
                 #if route_time < time_thres :
-                #    feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names,round(route_time,2)])
+                #    feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names, round(route_time,2)])
                 #    input('번들 생성 절약 시간 {}'.format(time_thres - route_time))
                 #[경로, 최대FTD, 평균FTD, 최소FTD]
         if len(feasible_routes) > 0:
@@ -251,7 +251,10 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
     if len(feasible_subset) > 0:
         feasible_subset.sort(key = operator.itemgetter(2))
         #GraphDraw(feasible_subset[0], customers)
-        return feasible_subset[0]
+        if feasible_return == True:
+            return feasible_subset
+        else:
+            return feasible_subset[0]
     else:
         return []
 
@@ -323,14 +326,12 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False, uncertainty = F
     for order_name in orders:
         order = orders[order_name]
         d = []
-        #dist_thres = p2 - distance(order.store_loc, order.location)/speed
         dist_thres = order.p2
         for order2_name in orders:
             order2 = orders[order2_name]
             dist = distance(order.store_loc, order2.store_loc)/speed
             if order2 != order and dist <= dist_thres:
                 d.append(order2.name)
-        #M = itertools.combinations(d,s-1)
         M = itertools.permutations(d, s - 1)
         #print('번들 구성 고려 subset 수 {}'.format(len(list(M))))
         #M = list(M)
