@@ -236,11 +236,12 @@ def ActiveRiderCalculator(rider):
 
 def WillingtoWork(rider, t_now):
     """
-    현재 라이더가 앞으로 일을 할 의향이 있는지 유/무를 계산.
+    시간당 수익이 희망 시간당 수익보다 작은 경우의 그 양
+    max(희망 시간당 수익 - 현재 라이더의 시간당 수익 ,0)
     @param rider: class rider
-    @return: True/ False
+    @return: max(희망 시간당 수익 - 현재 라이더의 시간당 수익 ,0)
     """
-    current_wagePerHr  = rider.fee/(t_now - rider.gen_time/60)
+    current_wagePerHr  = rider.fee/((t_now - rider.gen_time)/60)
     if current_wagePerHr >= rider.exp_wage: #임금이 자신의 허용 범위보다 작다면
         return current_wagePerHr
     else:
