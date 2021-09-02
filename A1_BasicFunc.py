@@ -127,7 +127,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     return True, ftds
 
 
-def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1):
+def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacity = 3, speed = 1, working_duration = 120, interval = 1, runtime = 1000, gen_num = 10, history = None, freedom = True, score_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, exp_WagePerHr = 9000):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -144,6 +144,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
         single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
+        single_rider.exp_wage = exp_WagePerHr
         Rider_dict[rider_num] = single_rider
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
         print('라이더 {} 생성. T {}'.format(rider_num, int(env.now)))
@@ -241,7 +242,7 @@ def WillingtoWork(rider, t_now):
     @param rider: class rider
     @return: max(희망 시간당 수익 - 현재 라이더의 시간당 수익 ,0)
     """
-    current_wagePerHr  = rider.fee/((t_now - rider.gen_time)/60)
+    current_wagePerHr  = rider.income/((t_now - rider.gen_time)/60)
     if current_wagePerHr >= rider.exp_wage: #임금이 자신의 허용 범위보다 작다면
         return current_wagePerHr
     else:

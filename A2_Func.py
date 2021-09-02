@@ -550,7 +550,7 @@ def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
     print('실려있는 고객 {}'.format(print2))
     return rev_order
 
-def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1):
+def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1, run_type = 2):
     B2 = []
     B3 = []
     while env.now <= end_t:

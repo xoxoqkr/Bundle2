@@ -57,6 +57,8 @@ class Rider(object):
         self.onhand_order_indexs = []
         self.decision_moment = []
         self.exp_error = exp_error
+        self.search_lamda = random.randint(2,5)
+        self.exp_wage = 0
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
 
 
@@ -90,9 +92,11 @@ class Rider(object):
                 order = customers[node_info[0]] #customer
                 store_name = order.store
                 move_t = Basic.distance(self.last_departure_loc, node_info[2]) / self.speed
+                #self.heading_to = node_info[2]
                 with self.resource.request() as req:
                     print('T: {} 노드 {} 시작'.format(int(env.now), node_info))
                     yield req  # users에 들어간 이후에 작동
+                    req.loc = node_info[2]
                     print('T: {} 라이더 : {} 노드 {} 이동 시작 예상 시간{}'.format(int(env.now), self.name, node_info, move_t))
                     if node_info[1] == 0: #가게인 경우
                         exp_store_arrive = env.now + move_t
@@ -483,8 +487,25 @@ class Rider(object):
         return round(1 - poisson.pmf(x, mu),4) # 주문을 1번이상 수행할 확률
 
 
-    def CurrentLoc(self):
-        pass
+    def CurrentLoc(self, t_now):
+        """
+        현재의 위치를 물어 보는 함수.
+        @return:
+        """
+        nodeA = self.last_departure_loc
+        try:
+            nodeB = self.resource.users[0].loc
+        except:
+            print('출발 위치 에러 ; 마지막 노드 {}'.format(self.last_departure_loc))
+            nodeB = self.last_departure_loc
+        if nodeA == nodeB:
+            return nodeA
+        else:
+            t = t_now - self.visited_route[-1][3] # nodeA출발 후 경과한 시간.
+            ratio = t / Basic.distance(nodeA, nodeB)
+            x_inc = (nodeB[0] - nodeA[0])*ratio
+            y_inc = (nodeB[1] - nodeA[1])*ratio
+            return [nodeA[0] + x_inc, nodeA[1] + y_inc]
 
 
 class Store(object):

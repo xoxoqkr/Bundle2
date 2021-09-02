@@ -9,13 +9,14 @@ from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave
 from A1_Class import Store, Platform_pool
 from A2_Func import Platform_process, ResultPrint
 import operator
+from Bundle_Run_ver0 import Platform_process3
 import matplotlib.pyplot as plt
 
 
 #Parameter define
 order_interval = 1.1
 interval = 5
-run_time = 150
+run_time = 100
 cool_time = 30 #run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True #음식 주문 불확실성 고려
 rider_exp_error = 1.5 #라이더가 가지는 불확실성
@@ -26,7 +27,7 @@ thres_p = 1
 
 rider_working_time = 120
 #env = simpy.Environment()
-store_num = 20
+store_num = 5
 rider_num = 6
 rider_gen_interval = 2 #라이더 생성 간격.
 rider_speed = 3
@@ -45,11 +46,12 @@ wait_para = False #True: 음식조리로 인한 대기시간 발생 #False : 음
 
 
 class scenario(object):
-    def __init__(self, name, p1, p2):
+    def __init__(self, name, p1, p2, scoring_type):
         self.name = name
         self.platform_work = p1
         self.unserved_order_break = p2
         self.res = []
+        self.scoring_type = 'myopic'
 
 scenarios = []
 
@@ -58,10 +60,13 @@ f.write('결과저장 시작' + '\n')
 f.close()
 
 #infos = [['A',False, False],['B',True, True],['C',True, False]]
-infos = [['A',False, False],['B',True, True],['C',True, False]]
+#infos = [['A',False, False],['B',True, True],['C',True, False]]
+#infos = [['A',False, False],['B',True, True],['C',True, False]]
 #infos = [['B',True, True]]
+infos = [['B',True, True, 'myopic'],['B',True, True, 'two_sided'],['C',True, False, 'myopic'],['C',True, False, 'two_sided']]
+
 for info in infos:
-    sc = scenario(info[0], info[1], info[2])
+    sc = scenario(info[0], info[1], info[2], info[3])
     scenarios.append(sc)
 
 for ite in range(ITE_NUM):
@@ -95,8 +100,14 @@ for ite in range(ITE_NUM):
                                    capacity=rider_capacity, history= rider_history, score_type= score_type, wait_para= wait_para, uncertainty = uncertainty_para, exp_error = rider_exp_error))
         env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime= run_time - cool_time, p2 = order_p2, p2_set= p2_set, speed= rider_speed, cooking_time = cooking_time, cook_time_type= cook_time_type))
         if sc.platform_work == True:
+            """
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
+            
+            """
+            env.process(Platform_process3(env, Platform2, Orders, Rider_dict, Store_dict,p2, thres_p, interval, speed=rider_speed,
+                                         end_t=1000, unserved_order_break=sc.unserved_order_break, divide_option = divide_option, platform_exp_error = platform_exp_error, scoring_type = sc.scoring_type))
+
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed)
         sc.res.append(res)
