@@ -203,17 +203,25 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
         B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed, bundle_search_variant = bundle_search_variant)
         B2 = ConstructFeasibleBundle_TwoSided(target_order, orders, s - 1, p2, speed=speed,bundle_search_variant=bundle_search_variant)
         feasible_bundles = B2 + B3
+        print('input_data == None :: ## {}'.format(len(feasible_bundles)))
     else:
         feasible_bundles = input_data
+        print('input_data != None')
     count = 0
     scores = []
     for feasible_bundle in feasible_bundles:
         s = feasible_bundle[6]
+        e_pool = []
+        d_pool = []
         e = 0
         d = 0
+        #print('확인123',scoring_type)
         if scoring_type == 'two_sided':
             e,d = Two_sidedScore(feasible_bundle, riders, orders, stores, platform, t, t_now, min_pr, M=1000, sample_size=1000)
-            print('s {} e {} d {} 계산 완료 '.format(s, e,d))
+            e_pool.append(e)
+            d_pool.append(d)
+            #print('s {} e {} d {} 계산 완료 '.format(s, e,d))
+        print('얼마나 다른가? e{} d{} '.format(list(set(e_pool)), list(set(d_pool))))
         scores.append([count, s,e,d,0])
         scores.sort(key = operator.itemgetter(1))
     #input('계산 완료 ')

@@ -219,7 +219,7 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 target_order = orders[customer_name]
                 selected_bundle = SelectByTwo_sided_way(target_order, riders, orders, stores, platform_set, p2, interval, env.now, min_pr,
                                                    speed=speed, scoring_type = scoring_type,bundle_search_variant=unserved_order_break)
-                print('T {} 계산 완료'.format(env.now))
+                #input('T {} 계산 완료'.format(env.now))
                 if selected_bundle != None:
                     B.append(selected_bundle)
             for index in platform_set.platform:
@@ -252,6 +252,7 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 else:
                     count[1].append(platform_set.platform[index].customers)
             print('고객 이름들 4 :: 단건 주문 {} 번들 주문 {}'.format(count[0], count[1]))
+            input('T {} 계산 완료'.format(env.now))
         else: #Break the offered bundle
             org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres=thres_p)
             if sum(rev_bundle_num) < sum(org_bundle_num):

@@ -51,7 +51,7 @@ class scenario(object):
         self.platform_work = p1
         self.unserved_order_break = p2
         self.res = []
-        self.scoring_type = 'myopic'
+        self.scoring_type = scoring_type
 
 scenarios = []
 
@@ -63,8 +63,8 @@ f.close()
 #infos = [['A',False, False],['B',True, True],['C',True, False]]
 #infos = [['A',False, False],['B',True, True],['C',True, False]]
 #infos = [['B',True, True]]
-infos = [['B',True, True, 'myopic'],['B',True, True, 'two_sided'],['C',True, False, 'myopic'],['C',True, False, 'two_sided']]
-
+#infos = [['B',True, True, 'myopic'],['B',True, True, 'two_sided'],['C',True, False, 'myopic'],['C',True, False, 'two_sided']]
+infos = [['B',True, True, 'two_sided']]
 for info in infos:
     sc = scenario(info[0], info[1], info[2], info[3])
     scenarios.append(sc)
@@ -203,7 +203,7 @@ for ite in range(ITE_NUM):
         #input('파일 확인')
         sub_info = 'divide_option : {}, p2: {}, divide_option: {}, unserved_order_break : {}'.format(divide_option, p2,sc.platform_work, sc.unserved_order_break)
         ResultSave(Rider_dict, Orders, title='Test', sub_info= sub_info, type_name= sc.name)
-        input('저장 확인')
+        #input('저장 확인')
 
 for sc in scenarios:
     count = 1
