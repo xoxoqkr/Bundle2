@@ -3,7 +3,7 @@
 #from scipy.stats import poisson
 import time
 from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,RequiredBreakBundleNum, BreakBundle
-from A3_two_sided import SelectByTwo_sided_way
+from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount
 import copy
 
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1, bundle_select_type = 'normal'):
@@ -197,8 +197,7 @@ def Platform_process2(env, platform_set, orders, riders, p2,thres_p,interval, sp
         yield env.timeout(interval)
 
 
-def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True, divide_option = False, platform_exp_error = 1, min_pr = 0.05, scoring_type = 'myopic'):
-    B = []
+def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_search_option = False, speed = 1, end_t = 1000, unserved_order_break = True, divide_option = False, platform_exp_error = 1, min_pr = 0.05, scoring_type = 'myopic'):
     while env.now <= end_t:
         now_t = env.now
         unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval = interval ,return_type = 'class') #lamda1
@@ -210,18 +209,48 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
         rev_order = ConsideredCustomer(platform_set, orders, unserved_order_break = unserved_order_break)
         print('번들 생성에 고려되는 고객들 {}'.format(sorted(list(rev_order.keys()))))
         if p >= thres_p:
+            B = []
             new_customer_names = []
             for customer_name in orders:
                 customer = orders[customer_name]
-                if env.now - interval <= customer.time_info[0] :
+                if env.now - interval <= customer.time_info[0] and customer.time_info[1] == None:
                     new_customer_names.append(customer.name)
+            print('새로 생긴 고객들 {}'.format(new_customer_names))
             for customer_name in new_customer_names:
+                start = time.time()
                 target_order = orders[customer_name]
                 selected_bundle = SelectByTwo_sided_way(target_order, riders, orders, stores, platform_set, p2, interval, env.now, min_pr,
-                                                   speed=speed, scoring_type = scoring_type,bundle_search_variant=unserved_order_break)
+                                                   speed=speed, scoring_type = scoring_type,bundle_search_variant=unserved_order_break, bundle_search_option= bundle_search_option)
+                end = time.time()
+                print('고객 당 계산 시간 {}'.format(end - start))
+                print('선택 번들1',selected_bundle)
                 #input('T {} 계산 완료'.format(env.now))
                 if selected_bundle != None:
                     B.append(selected_bundle)
+            B = ParetoDominanceCount(B, 0, 8, 9, 10, strict_option = False)
+            selected_customer_name_check = []
+            #기존에 제시되어 있던 번들 중 새롭게 구성된 번들과 겹치는 부분이 있으면 삭제해야 함.
+            print('T {} '.format(env.now))
+            unique_bundles = []
+            for bundle_info in B:
+                duplicate = False
+                for ct_name in bundle_info[4]:
+                    if ct_name in selected_customer_name_check:
+                        duplicate = True
+                        break
+                if duplicate == True:
+                    continue
+                else:
+                    unique_bundles.append(bundle_info[:7])
+                    selected_customer_name_check += bundle_info[4]
+            duplicate_customers = []
+            for rider_name in riders:
+                rider = riders[rider_name]
+                duplicate_customers = list(set(rider.onhand).intersection(set(selected_customer_name_check)))
+                if len(duplicate_customers) > 0:
+                    input('T {} / 겸침 발생 :: 라이더 {} :: {}, {}'.format(int(env.now), rider_name, rider.onhand,selected_customer_name_check))
+            print('선택 번들2{}'.format(unique_bundles))
+            #B = unique_bundles
             for index in platform_set.platform:
                 bundle_names += platform_set.platform[index].customers
             order_indexs = []
@@ -231,17 +260,22 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
             if len(order_indexs) > 0:
                 order_index = max(order_indexs) + 1
             bundle_names = []
+            order_subset_names = []
             for index in platform_set.platform:
                 bundle_names += platform_set.platform[index].customers
+                order_subset_names.append(platform_set.platform[index].customers)
+            #input('제안되고 있는 고객 들 {} '.format(order_subset_names))
             #todo : 제안된 번들 중에서 특정 번들을 선택하는 과정
-            new_orders = PlatformOrderRevise(B, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2), platform_exp_error = platform_exp_error)
+            new_orders = PlatformOrderRevise(unique_bundles, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2), platform_exp_error = platform_exp_error)
             bundle_names = []
+            bundle_check = []
             for index in new_orders:
                 bundle_names += new_orders[index].customers
+                bundle_check.append([new_orders[index].customers])
             still_names = []
             for index in platform_set.platform:
                 still_names += platform_set.platform[index].customers
-            print('고객 이름들 3 :: 기존 {} 추가 {}'.format(list(sorted(still_names)),list(sorted(bundle_names))))
+            print('고객 이름들 3 :: 기존 {} 추가 {} 추가 2 {}'.format(list(sorted(still_names)),list(sorted(bundle_names)),bundle_check))
             print('전체함수 플랫폼1 ID{}'.format(id(platform_set)))
             print('원래 index {} :: 추가 index {}'.format(platform_set.platform.keys(),new_orders.keys()))
             platform_set.platform = new_orders
@@ -252,8 +286,9 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 else:
                     count[1].append(platform_set.platform[index].customers)
             print('고객 이름들 4 :: 단건 주문 {} 번들 주문 {}'.format(count[0], count[1]))
-            input('T {} 계산 완료'.format(env.now))
+            print('T {} 계산 완료'.format(env.now))
         else: #Break the offered bundle
+            print('ELSE 문 실행')
             org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres=thres_p)
             if sum(rev_bundle_num) < sum(org_bundle_num):
                 break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]] #[B2 해체 수, B3 해체 수]

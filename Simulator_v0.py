@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 #Parameter define
 order_interval = 1.1
 interval = 5
-run_time = 100
+run_time = 150
 cool_time = 30 #run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True #음식 주문 불확실성 고려
 rider_exp_error = 1.5 #라이더가 가지는 불확실성
@@ -27,8 +27,8 @@ thres_p = 1
 
 rider_working_time = 120
 #env = simpy.Environment()
-store_num = 5
-rider_num = 6
+store_num = 20
+rider_num = 5
 rider_gen_interval = 2 #라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 1
@@ -46,12 +46,13 @@ wait_para = False #True: 음식조리로 인한 대기시간 발생 #False : 음
 
 
 class scenario(object):
-    def __init__(self, name, p1, p2, scoring_type):
+    def __init__(self, name, p1, p2, scoring_type, search_option):
         self.name = name
         self.platform_work = p1
         self.unserved_order_break = p2
         self.res = []
         self.scoring_type = scoring_type
+        self.bundle_search_option = search_option
 
 scenarios = []
 
@@ -64,9 +65,15 @@ f.close()
 #infos = [['A',False, False],['B',True, True],['C',True, False]]
 #infos = [['B',True, True]]
 #infos = [['B',True, True, 'myopic'],['B',True, True, 'two_sided'],['C',True, False, 'myopic'],['C',True, False, 'two_sided']]
-infos = [['B',True, True, 'two_sided']]
+#infos = [['B',True, True, 'myopic'],['B',True, True, 'two_sided']]
+#infos = [['B',True, True, 'myopic'],['B',True, True, 'two_sided']]
+#infos = [['B',True, True, 'two_sided', True],['B',True, True, 'two_sided', False]]
+#infos = [['B',True, True, 'myopic', True],['B',True, True, 'two_sided', True]]
+#infos = [['B',True, True, 'myopic', True],['B',True, True, 'two_sided', True],['C',True, False, 'myopic', True],['C',True, False, 'two_sided', True]]
+infos = [['C',True, False, 'myopic', True],['C',True, False, 'two_sided', True]]
+infos = [['C',True, False, 'myopic', True]]
 for info in infos:
-    sc = scenario(info[0], info[1], info[2], info[3])
+    sc = scenario(info[0], info[1], info[2], info[3], info[4])
     scenarios.append(sc)
 
 for ite in range(ITE_NUM):
@@ -105,7 +112,7 @@ for ite in range(ITE_NUM):
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
             
             """
-            env.process(Platform_process3(env, Platform2, Orders, Rider_dict, Store_dict,p2, thres_p, interval, speed=rider_speed,
+            env.process(Platform_process3(env, Platform2, Orders, Rider_dict, Store_dict,p2, thres_p, interval, speed=rider_speed,bundle_search_option = option_para,
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, divide_option = divide_option, platform_exp_error = platform_exp_error, scoring_type = sc.scoring_type))
 
         env.run(run_time)
@@ -209,7 +216,7 @@ for sc in scenarios:
     count = 1
     for res_info in sc.res:
         try:
-            print('시나리오로 {} ITE {} /전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(sc.name , count,res_info[0],res_info[1],res_info[2],res_info[3],res_info[4],res_info[5]))
+            print('시나리오 {} 타입 {} ITE {} /전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(sc.name ,sc.scoring_type, count,res_info[0],res_info[1],res_info[2],res_info[3],res_info[4],res_info[5]))
         except:
-            print('시나리오로 {} ITE {} 결과 없음'.format(sc.name , count))
+            print('시나리오 {} ITE {} 결과 없음'.format(sc.name , count))
         count += 1

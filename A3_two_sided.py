@@ -9,8 +9,10 @@ from A2_Func import BundleConsist
 import numpy as np
 import random
 import copy
+import time
 
-def CountActiveRider(riders, t, min_pr = 0):
+
+def CountActiveRider(riders, t, min_pr = 0, t_now = 0):
     """
     현대 시점에서 t 시점내에 주문을 선택할 확률이 min_pr보다 더 높은 라이더를 계산
     @param riders: RIDER CLASS DICT
@@ -21,7 +23,7 @@ def CountActiveRider(riders, t, min_pr = 0):
     names = []
     for rider_name in riders:
         rider = riders[rider_name]
-        if ActiveRiderCalculator(rider) == True and rider.select_pr(t) >= min_pr:
+        if ActiveRiderCalculator(rider, t_now) == True and rider.select_pr(t) >= min_pr:
             names.append(rider_name)
     return names
 
@@ -120,6 +122,7 @@ def BundleScoreSimulator(riders, platform, orders, stores, w, t, t_now):
         for rider_name in seq:
             rider = riders[rider_name]
             current_loc = rider.CurrentLoc(t_now)
+            #print('가짜', t_now)
             select_order_name = rider.OrderSelect(platform, orders, current_loc = current_loc)
             tem.append([rider_name, select_order_name])
         #e_b_bar = Calculate_e_b(stores, riders, tem, t_now)
@@ -176,11 +179,55 @@ def ParetoDominanceCount(datas, index, score_index1, score_index2, result_index,
         datas[count][result_index] = dominance_count
         #input('확인')
         count += 1
-    datas.sort(key = operator.itemgetter(result_index))
+    datas.sort(key = operator.itemgetter(result_index), reverse = True)
     return datas
 
 
-def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, speed = 1, bundle_search_variant = 1, s = 3, scoring_type = 'myopic',input_data = None):
+def BundleConsideredCustomers(target_order, platform, riders, customers, speed = 1, bundle_search_variant = True, d_thres_option = True):
+    not_served_ct_name_cls = {}
+    not_served_ct_names = [] #번들 구성에 고려될 수 있는 고객들
+    for customer_name in customers:
+        customer = customers[customer_name]
+        if customer.time_info[1] == None and customer.time_info[2] == None:
+            if customer.type == 'single_order':
+                pass
+            else:
+                if bundle_search_variant == True:
+                    pass
+                else:
+                    continue
+            if d_thres_option == False:
+                d_thres = 1000
+            else:
+                d_thres = customer.p2
+            dist = distance(target_order.store_loc, customer.store_loc) / speed
+            if target_order.name != customer.name and dist <= d_thres:
+                not_served_ct_names.append(customer_name)
+                not_served_ct_name_cls[customer_name] = customer
+    current_in_bundle = []
+    current_in_single = []
+    for order_index in platform.platform:
+        order = platform.platform[order_index]
+        if order.type == 'bundle':
+            current_in_bundle += platform.platform[order_index].customers
+        else:
+            current_in_single += platform.platform[order_index].customers
+    rider_on_hand = []
+    rider_finished = []
+    for rider_name in riders:
+        rider = riders[rider_name]
+        rider_on_hand += rider.onhand
+        rider_finished += rider.served
+    res = {}
+    for ct_name in not_served_ct_names:
+        if ct_name in rider_on_hand + rider_finished:
+            input('ERROR {} :: 고려 고객 {} 제외1 {} 제외 2 {}'.format(ct_name, not_served_ct_names, rider_on_hand, rider_finished))
+        else:
+            res[ct_name] = customers[ct_name]
+    return res
+
+
+def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, bundle_search_option = False, thres = 0.1, speed = 1, bundle_search_variant = 1, s = 3, scoring_type = 'myopic',input_data = None):
     """
     주어진 feasible bundle(혹은 target order를 기준으로 탐색된 feasible bundle)에
     대해서 s,e,d 점수가 높은 번들을 선택 후 제안.
@@ -199,14 +246,46 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
     @param input_data: feasible_bundles을 외부에서 계산하는 경우에 데이터 입력
     @return:
     """
+
+    """
+    considered_customers = {}
+    for customer_name in orders:
+        customer = orders[customer_name]
+        if customer.time_info[1] == True:
+            continue
+        else:
+            if order.type == 'single':
+                considered_customers[customer_name] = order
+            else:
+                if bundle_search_variant == False:
+                    considered_customers[customer_name] = order
+                else:
+                    pass    
+    """
     if input_data == None:
-        B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed, bundle_search_variant = bundle_search_variant)
-        B2 = ConstructFeasibleBundle_TwoSided(target_order, orders, s - 1, p2, speed=speed,bundle_search_variant=bundle_search_variant)
+        considered_customers = BundleConsideredCustomers(target_order, platform, riders, orders, bundle_search_variant = bundle_search_variant, d_thres_option = True , speed=speed)
+        test = []
+        for info in considered_customers:
+            test.append(considered_customers[info].name)
+        #input('현재 고객 {} 고려 고객들 {}'.format(target_order.name, test))
+        considered_customers[target_order.name] = target_order
+        #B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed, bundle_search_variant = bundle_search_variant)
+        #B2 = ConstructFeasibleBundle_TwoSided(target_order, orders, s - 1, p2, speed=speed,bundle_search_variant=bundle_search_variant)
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, s, p2, speed=speed, bundle_search_variant = bundle_search_variant, option = bundle_search_option)
+        B2 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, s - 1, p2, speed=speed,bundle_search_variant=bundle_search_variant, option = bundle_search_option)
         feasible_bundles = B2 + B3
-        print('input_data == None :: ## {}'.format(len(feasible_bundles)))
+        if len(feasible_bundles) > 0:
+            comparable_b = []
+            feasible_bundles.sort(key=operator.itemgetter(6))  # s_b 순으로 정렬  #target order를 포함하는 모든 번들에 대해서 s_b를 계산.
+            b_star = feasible_bundles[0][6]
+            for ele in feasible_bundles:
+                if (ele[6] - b_star) / b_star <= thres:  # percent loss 가 thres 보다 작아야 함.
+                    comparable_b.append(ele)
+            feasible_bundles = comparable_b
+        #input('input_data == None :: ## {}'.format(len(feasible_bundles)))
     else:
         feasible_bundles = input_data
-        print('input_data != None')
+        #print('input_data != None')
     count = 0
     scores = []
     for feasible_bundle in feasible_bundles:
@@ -215,28 +294,40 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
         d_pool = []
         e = 0
         d = 0
-        #print('확인123',scoring_type)
+        #print('Two_sidedScore 시작')
         if scoring_type == 'two_sided':
-            e,d = Two_sidedScore(feasible_bundle, riders, orders, stores, platform, t, t_now, min_pr, M=1000, sample_size=1000)
-            e_pool.append(e)
-            d_pool.append(d)
+            #print('Two_sidedScore 시작')
+            #start = time.time()
+            try:
+                e,d = Two_sidedScore(feasible_bundle, riders, orders, stores, platform, t, t_now, min_pr, M=1000, sample_size=1000)
+                #end = time.time()
+                #print('계산 시간 {}'.format(end - start))
+                e_pool.append(e)
+                d_pool.append(d)
+            except:
+                e = 1000000
+                d = 1000000
+                pass
             #print('s {} e {} d {} 계산 완료 '.format(s, e,d))
-        print('얼마나 다른가? e{} d{} '.format(list(set(e_pool)), list(set(d_pool))))
+        #print('얼마나 다른가? e{} d{} '.format(list(set(e_pool)), list(set(d_pool))))
         scores.append([count, s,e,d,0])
-        scores.sort(key = operator.itemgetter(1))
+        count += 1
+    scores.sort(key = operator.itemgetter(1), reverse = True)
     #input('계산 완료 ')
     if scoring_type == 'myopic':
         sorted_scores = scores
     else:
         sorted_scores = ParetoDominanceCount(scores, 0, 2, 3, 4, strict_option = False)
-        print(sorted_scores)
+        print('scored datas :: {}'.format(sorted_scores))
     #return sorted_scores[0], feasible_bundles[sorted_scores[0][0]]
     if len(feasible_bundles) > 0:
-        return feasible_bundles[sorted_scores[0][0]]
+        res = feasible_bundles[sorted_scores[0][0]] + sorted_scores[0][1:4] + [0]
+        #return feasible_bundles[sorted_scores[0][0]]
+        return res
     else:
         return None
 
-def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.1, speed = 1, option = False, uncertainty = False, platform_exp_error = 1, bundle_search_variant = 1):
+def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, option = False, uncertainty = False, platform_exp_error = 1, bundle_search_variant = 1):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -252,45 +343,63 @@ def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.1, s
     :parm bundle_search_variant: 번들 탐색시 대상이 되는 고객들 결정 (True : 기존에 번들의 고객들은 고려 X , False : 기존 번들의 고객도  고려)
     :return: constructed bundle set
     """
+
+    """
+    d1 = []
+    for order_name in orders:
+        d1.append(orders[order_name].name)
+    print('입력 고객 {}'.format(d1))
+    orders_name = []
     d = []
     for order_name in orders:
         order = orders[order_name]
-        if bundle_search_variant == False:
-            if order.type == 'bundle':
-                continue
-            else:
+        if order.time_info[1] == None and order.time_info[2] == None:
+            if order.type == 'single_order':
                 pass
-        dist_thres = order.p2
-        dist = distance(target_order.store_loc , order.store_loc) / speed
-        if target_order.name != order.name and dist <= dist_thres:
+            else:
+                if bundle_search_variant == True:
+                    pass
+                else:
+                    continue
+            dist = distance(target_order.store_loc , order.store_loc) / speed
+        if target_order.name != order.name and dist <= order.p2:
             d.append(order.name)
-    M = itertools.permutations(d, s - 1)
-    b = []
-    for m in M:
-        q = list(m) + [target_order.name]
-        subset_orders = []
-        time_thres = 0 #3개의 경로를 연속으로 가는 것 보다는
-        for name in q:
-            subset_orders.append(orders[name])
-            time_thres += orders[name].distance/speed
-        tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_return = True)
-        if len(tem_route_info) > 0:
-            OD_pair_dist = MIN_OD_pair(orders, q, s)
-            for info in tem_route_info:
-                info.append((OD_pair_dist - info[5] / s))
-        b += tem_route_info
-    comparable_b = []
-    if len(b) > 0:
-        b.sort(key=operator.itemgetter(6))  # s_b 순으로 정렬  #target order를 포함하는 모든 번들에 대해서 s_b를 계산.
-        b_star = b[0][6]
-        for ele in b:
-            if (ele[6] - b_star)/b_star <= thres: #percent loss 가 thres 보다 작아야 함.
-                comparable_b.append(ele)
-    return comparable_b
-
+    orders[target_order.name] = target_order    
+    """
+    d = []
+    for customer_name in orders:
+        if customer_name != target_order.name:
+            d.append(customer_name)
+    #input('대상 고객 {} 고려 고객들 {} '.format(target_order.name, d))
+    if len(d) > s - 1:
+        M = itertools.permutations(d, s - 1)
+        b = []
+        for m in M:
+            q = list(m) + [target_order.name]
+            subset_orders = []
+            time_thres = 0 #3개의 경로를 연속으로 가는 것 보다는
+            for name in q:
+                subset_orders.append(orders[name])
+                time_thres += orders[name].distance/speed
+            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_return = True)
+            if len(tem_route_info) > 0:
+                OD_pair_dist = MIN_OD_pair(orders, q, s)
+                for info in tem_route_info:
+                    info.append((OD_pair_dist - info[5] / s))
+            b += tem_route_info
+        comparable_b = []
+        if len(b) > 0:
+            b.sort(key=operator.itemgetter(6))  # s_b 순으로 정렬  #target order를 포함하는 모든 번들에 대해서 s_b를 계산.
+            b_star = b[0][6]
+            for ele in b:
+                if (ele[6] - b_star)/b_star <= thres: #percent loss 가 thres 보다 작아야 함.
+                    comparable_b.append(ele)
+        return comparable_b
+    else:
+        return []
 
 def Two_sidedScore(bundle, riders, orders, stores, platform, t, t_now, min_pr , M = 1000, sample_size=1000, platform_exp_error = 1):
-    active_rider_names = CountActiveRider(riders, t, min_pr=min_pr)
+    active_rider_names = CountActiveRider(riders, t, min_pr=min_pr, t_now = t_now)
     p_s_t = WeightCalculator(riders, active_rider_names, sample_size=sample_size)
     w_list = []
     for p in p_s_t:

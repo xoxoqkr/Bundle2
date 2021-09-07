@@ -159,7 +159,7 @@ class Rider(object):
                     else:#고객인 경우
                         #input('T: {} 고객 {} 이동 시작'.format(int(env.now),node_info[0]))
                         yield env.process(self.RiderMoving(env, move_t))
-                        print('T: {} 라이더 {} 고객 {} 도착'.format(int(env.now),self.name, node_info[0]))
+                        print('T: {} 라이더 {} 고객 {} 도착 서비스 종료'.format(int(env.now),self.name, node_info[0]))
                         #input('고객 도착')
                         order.time_info[3] = env.now
                         order.who_serve.append([self.name, int(env.now)])
@@ -193,6 +193,7 @@ class Rider(object):
             if len(self.onhand) < self.capacity and freedom_para == True:
                 print('T{} 라이더 {} 추가 탐색 시작'.format(env.now, self.name))
                 test = []
+                print('플랫폼 ID 확인 {}'.format(id(platform)))
                 for index in platform.platform:
                     test += [platform.platform[index].customers]
                 #t1 = time.time()
@@ -209,7 +210,7 @@ class Rider(object):
                 #print('계산 종료 {} '.format(env.now))
                 if order_info != None:
                     #input('체크')
-                    #input('T {} 라이더 {} 주문 {} 선택 : 주문 고객 {}'.format(int(env.now),self.name, order_info[0], order_info[1]))
+                    print('T {} 라이더 {} 주문 {} 선택 : 주문 고객 {}'.format(int(env.now),self.name, order_info[0], order_info[1]))
                     self.decision_moment.append(round(env.now,2))
                     #print('라이더 {} :: 간격 {} 현재 {} 최근 시점 {}'.format(self.name, self.decision_moment[-1], env.now, self.decision_moment[-2]))
                     added_order = platform.platform[order_info[0]]
@@ -222,7 +223,10 @@ class Rider(object):
                     #print('대상 주문들 선택 여부:: 인덱스 {} 고객들{} 선택여부{}'.format(added_order.index, added_order.customers,added_order.picked))
                     #print('T: {}/ 라이더 {}/ 주문 {} 선택 / 고객들 {}'.format(int(env.now), self.name, added_order.index, added_order.customers))
                     #print('라이더 {} 플랫폼 ID{}'.format(self.name, id(platform)))
+                    #input('정보00 {} 확인 {} :: {}'.format(order_info, platform.platform[order_info[0]].picked,platform.platform[order_info[0]]))
                     self.OrderPick(added_order, order_info[1], customers, env.now)
+                    #input('정보11 {} 확인 {} :: {}'.format(order_info, platform.platform[order_info[0]].picked, platform.platform[order_info[0]]))
+                    #input('확인2',platform.platform[order_info[1][0][0]].picked)
                     if len(added_order.route) > 2:
                         self.b_select += 1
                         self.num_bundle_customer += len(added_order.customers)
@@ -236,7 +240,7 @@ class Rider(object):
                         print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - wait_time, int(env.now)))
 
 
-    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None):
+    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None, add = 'X' ):
         """
         라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
         1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
@@ -254,7 +258,7 @@ class Rider(object):
             # 현재의 경로를 반영한 비용
             order = platform.platform[index]
             exp_onhand_order = order.customers + self.onhand
-            #print('주문 고객 확인 {}/ 자신의 경로 길이 {}'.format(order.customers, len(self.route)))
+            #print('주문 고객 확인 {}/ 자신의 경로 길이 {} / 상태 {}/ ID {}'.format(order.customers, len(self.route), order.picked, id(order)))
             if order.picked == False:
                 #if ((len(exp_onhand_order) <= self.capacity and len(self.picked_orders) <= self.max_order_num)) or (len(order.route) > 2 and len(self.onhand) < 3):
                 if Basic.ActiveRiderCalculator(self) == True:
@@ -305,6 +309,9 @@ class Rider(object):
                     score.append([order.index] + [order.route ,None,None,None,order.customers,None] + [WagePerMin])
         if len(score) > 0:
             score.sort(key=operator.itemgetter(sort_standard), reverse = True)
+            for info in score:
+                #print('오더 index {} picked 유/무 {}'.format(info[0], platform.platform[info[0]].picked))
+                pass
             #input('score 체크{}'.format(score))
             return score[0]
         else:
@@ -477,7 +484,7 @@ class Rider(object):
         self.route = route
         self.onhand += names
         self.picked_orders.append([order.index, names])
-        print('라이더 {} 수정후 경로 {}/ 보유 고객 {}'.format(self.name, self.route, self.onhand))
+        print('라이더 {} 수정후 경로 {}/ 보유 고객 {}/ 추가된 고객 {}'.format(self.name, self.route, self.onhand, names))
 
 
     def select_pr(self, t):
@@ -496,7 +503,7 @@ class Rider(object):
         try:
             nodeB = self.resource.users[0].loc
         except:
-            print('출발 위치 에러 ; 마지막 노드 {}'.format(self.last_departure_loc))
+            #print(' T {} 출발 위치 에러 ; 마지막 노드 {}'.format(t_now, self.last_departure_loc))
             nodeB = self.last_departure_loc
         if nodeA == nodeB:
             return nodeA
@@ -574,7 +581,7 @@ class Store(object):
                             #platform[order_index] = o
                             platform.platform[order_index] = o
                             print('T : {} 가게 {} 고객 {} 주문 인덱스 {}에 추가'.format(env.now, self.name, o.customers, o.index))
-                            print('가게 플랫폼 ID{}'.format(id(platform)))
+                            print('플랫폼 ID{}'.format(id(platform)))
                         #platform.append(o)
                         #print('T : {} 가게 {} 고객 {} 주문 인덱스 {}에 추가'.format(env.now, self.name, o.customers, o.index))
                         if print_para == True:

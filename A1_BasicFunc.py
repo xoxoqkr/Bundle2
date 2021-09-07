@@ -214,22 +214,23 @@ def UpdatePlatformByOrderSelection(platform, order_index):
     """
     delete_order_index = []
     order = platform.platform[order_index]
-    for order_index in platform.platform:
-        compare_order = platform.platform[order_index]
-        duplicate_customers = list(set(order.customers).intersection(compare_order.customers))
-        if len(duplicate_customers) > 1:
-            delete_order_index.append(compare_order.index)
+    for order_index1 in platform.platform:
+        compare_order = platform.platform[order_index1]
+        if order_index != order_index1:
+            duplicate_customers = list(set(order.customers).intersection(compare_order.customers))
+            if len(duplicate_customers) > 0:
+                delete_order_index.append(compare_order.index)
     for order_index in delete_order_index:
         del platform.platform[order_index]
 
 
-def ActiveRiderCalculator(rider):
+def ActiveRiderCalculator(rider, t_now = 0):
     """
     현재 라이더가 새로운 주문을 선택할 수 있는지 유/무를 계산.
     @param rider: class rider
     @return: True/ False
     """
-    if len(rider.picked_orders) <= rider.max_order_num:
+    if len(rider.picked_orders) <= rider.max_order_num and t_now <= rider.end_t :
         return True
     else:
         return False
