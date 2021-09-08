@@ -186,10 +186,15 @@ def ParetoDominanceCount(datas, index, score_index1, score_index2, result_index,
 def BundleConsideredCustomers(target_order, platform, riders, customers, speed = 1, bundle_search_variant = True, d_thres_option = True):
     not_served_ct_name_cls = {}
     not_served_ct_names = [] #번들 구성에 고려될 수 있는 고객들
+    in_bundle_names = []
+    for order_index in platform.platform:
+        order = platform.platform[order_index]
+        if order.type == 'bundle':
+            in_bundle_names.append(order.customers)
     for customer_name in customers:
         customer = customers[customer_name]
         if customer.time_info[1] == None and customer.time_info[2] == None:
-            if customer.type == 'single_order':
+            if customer.type == 'single_order' and customer_name not in in_bundle_names:
                 pass
             else:
                 if bundle_search_variant == True:
@@ -227,7 +232,7 @@ def BundleConsideredCustomers(target_order, platform, riders, customers, speed =
     return res
 
 
-def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, bundle_search_option = False, thres = 0.1, speed = 1, bundle_search_variant = 1, s = 3, scoring_type = 'myopic',input_data = None):
+def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, thres = 0.1, speed = 1, bundle_permutation_option = False, unserved_bundle_order_break = True, s = 3, scoring_type = 'myopic',input_data = None):
     """
     주어진 feasible bundle(혹은 target order를 기준으로 탐색된 feasible bundle)에
     대해서 s,e,d 점수가 높은 번들을 선택 후 제안.
@@ -263,7 +268,7 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
                     pass    
     """
     if input_data == None:
-        considered_customers = BundleConsideredCustomers(target_order, platform, riders, orders, bundle_search_variant = bundle_search_variant, d_thres_option = True , speed=speed)
+        considered_customers = BundleConsideredCustomers(target_order, platform, riders, orders, bundle_search_variant = unserved_bundle_order_break, d_thres_option = True , speed=speed)
         test = []
         for info in considered_customers:
             test.append(considered_customers[info].name)
@@ -271,8 +276,8 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
         considered_customers[target_order.name] = target_order
         #B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed, bundle_search_variant = bundle_search_variant)
         #B2 = ConstructFeasibleBundle_TwoSided(target_order, orders, s - 1, p2, speed=speed,bundle_search_variant=bundle_search_variant)
-        B3 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, s, p2, speed=speed, bundle_search_variant = bundle_search_variant, option = bundle_search_option)
-        B2 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, s - 1, p2, speed=speed,bundle_search_variant=bundle_search_variant, option = bundle_search_option)
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, s, p2, speed=speed, bundle_permutation_option = bundle_permutation_option)
+        B2 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, s - 1, p2, speed=speed,bundle_permutation_option=bundle_permutation_option)
         feasible_bundles = B2 + B3
         if len(feasible_bundles) > 0:
             comparable_b = []
@@ -322,12 +327,13 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
     #return sorted_scores[0], feasible_bundles[sorted_scores[0][0]]
     if len(feasible_bundles) > 0:
         res = feasible_bundles[sorted_scores[0][0]] + sorted_scores[0][1:4] + [0]
+        #input('res {}'.format(res))
         #return feasible_bundles[sorted_scores[0][0]]
         return res
     else:
         return None
 
-def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, option = False, uncertainty = False, platform_exp_error = 1, bundle_search_variant = 1):
+def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, bundle_permutation_option = False, uncertainty = False, platform_exp_error = 1):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -381,7 +387,7 @@ def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, 
             for name in q:
                 subset_orders.append(orders[name])
                 time_thres += orders[name].distance/speed
-            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_return = True)
+            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, bundle_permutation_option= bundle_permutation_option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_return = True)
             if len(tem_route_info) > 0:
                 OD_pair_dist = MIN_OD_pair(orders, q, s)
                 for info in tem_route_info:

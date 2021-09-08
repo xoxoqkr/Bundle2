@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 #Parameter define
 order_interval = 1.1
 interval = 5
-run_time = 150
+run_time = 200
 cool_time = 30 #run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True #음식 주문 불확실성 고려
 rider_exp_error = 1.5 #라이더가 가지는 불확실성
@@ -32,7 +32,7 @@ rider_num = 5
 rider_gen_interval = 2 #라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 1
-ITE_NUM = 1
+ITE_NUM = 5
 option_para = True #True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
 customer_max_range = 50
 store_max_range = 30
@@ -49,7 +49,7 @@ class scenario(object):
     def __init__(self, name, p1, p2, scoring_type, search_option):
         self.name = name
         self.platform_work = p1
-        self.unserved_order_break = p2
+        self.unserved_order_break = p2 #True면 기존에 있는 번들 고객도 고려, False면 번들에 없는 고객만 고려
         self.res = []
         self.scoring_type = scoring_type
         self.bundle_search_option = search_option
@@ -70,8 +70,9 @@ f.close()
 #infos = [['B',True, True, 'two_sided', True],['B',True, True, 'two_sided', False]]
 #infos = [['B',True, True, 'myopic', True],['B',True, True, 'two_sided', True]]
 #infos = [['B',True, True, 'myopic', True],['B',True, True, 'two_sided', True],['C',True, False, 'myopic', True],['C',True, False, 'two_sided', True]]
+#infos = [['B',True, True, 'myopic', True],['C',True, False, 'myopic', True]]
 infos = [['C',True, False, 'myopic', True],['C',True, False, 'two_sided', True]]
-infos = [['C',True, False, 'myopic', True]]
+#infos = [['C',True, False, 'myopic', True]]
 for info in infos:
     sc = scenario(info[0], info[1], info[2], info[3], info[4])
     scenarios.append(sc)
@@ -112,8 +113,8 @@ for ite in range(ITE_NUM):
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
             
             """
-            env.process(Platform_process3(env, Platform2, Orders, Rider_dict, Store_dict,p2, thres_p, interval, speed=rider_speed,bundle_search_option = option_para,
-                                         end_t=1000, unserved_order_break=sc.unserved_order_break, divide_option = divide_option, platform_exp_error = platform_exp_error, scoring_type = sc.scoring_type))
+            env.process(Platform_process3(env, Platform2, Orders, Rider_dict, Store_dict,p2, thres_p, interval, speed=rider_speed,bundle_permutation_option = option_para,
+                                         end_t=1000, unserved_bundle_order_break=sc.unserved_order_break, divide_option = divide_option, platform_exp_error = platform_exp_error, scoring_type = sc.scoring_type))
 
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed)
@@ -200,7 +201,7 @@ for ite in range(ITE_NUM):
         ave_wait_time = round(wait_time/len(Rider_dict),2)
         #print('candis 수 {}'.format(candis))
         print('고객 서비스 율 {} 전체 {} 중 {} 서비스 됨/ 평균 리드타임 {}'.format(round(served_num/len(Orders),2),len(Orders), served_num, round(sum(lead_times)/len(lead_times),2)))
-        print('라이더 수 {} 평균 수행 주문 수 {} 평균 유휴 분 {} 평균 후보 수 {} 평균 선택 번들 수 {} 가게 대기 시간 {} 번들가게대기시간 {} 단건가게대기시간 {} 고객 평균 대기 시간 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2),round(sum(candis)/len(candis),2), b_select/len(Rider_dict), round(store_wait_time/len(Rider_dict),2),bundle_store_wait_time,single_store_wait_time,wait_time_per_customer))
+        print('라이더 수 ;{} ;평균 수행 주문 수 ;{} ;평균 유휴 분 ;{} ;평균 후보 수 {} 평균 선택 번들 수 {} 가게 대기 시간 {} 번들가게대기시간 {} 단건가게대기시간 {} 고객 평균 대기 시간 {}'.format(len(Rider_dict), round(len(res)/len(Rider_dict),2),round(wait_time/len(Rider_dict),2),round(sum(candis)/len(candis),2), b_select/len(Rider_dict), round(store_wait_time/len(Rider_dict),2),bundle_store_wait_time,single_store_wait_time,wait_time_per_customer))
         res_info = sc.res[-1]
         info = str(sc.name) + ';' + str(ite) + ';' + str(res_info[0]) + ';' + str(res_info[1]) + ';' + str(res_info[2]) + ';' +str(res_info[3]) + ';' + str(res_info[4]) + ';' + str(round(res_info[5],4)) + ';' + str(ave_wait_time) +';' +str(b_select) +'\n'
         #'시나리오로 {} ITE {} /전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'
@@ -216,7 +217,7 @@ for sc in scenarios:
     count = 1
     for res_info in sc.res:
         try:
-            print('시나리오 {} 타입 {} ITE {} /전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(sc.name ,sc.scoring_type, count,res_info[0],res_info[1],res_info[2],res_info[3],res_info[4],res_info[5]))
+            print('시나리오 ;{}; 타입 ;{}; ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};'.format(sc.name ,sc.scoring_type, count,res_info[0],res_info[1],res_info[2],res_info[3],res_info[4],res_info[5], res_info[6], res_info[7], res_info[8]))
         except:
             print('시나리오 {} ITE {} 결과 없음'.format(sc.name , count))
         count += 1

@@ -185,7 +185,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     return res
 
 
-def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, option = False, uncertainty = False, platform_exp_error =  1, feasible_return = False):
+def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, bundle_permutation_option = False, uncertainty = False, platform_exp_error =  1, feasible_return = False):
     """
     Construct bundle consists of orders
     :param orders: customer order in the route. type: customer class
@@ -202,7 +202,7 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, opt
     for name in order_names:
         store_names.append(name + M)
     candi = order_names + store_names
-    if option == False:
+    if bundle_permutation_option == False:
         subset = itertools.permutations(candi, len(candi))
     else:
         store_subset = itertools.permutations(store_names, len(store_names))
@@ -343,7 +343,7 @@ def ConstructBundle(orders, s, n, p2, speed = 1, option = False, uncertainty = F
             for name in q:
                 subset_orders.append(orders[name])
                 time_thres += orders[name].distance/speed
-            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error)
+            tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, bundle_permutation_option= option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error)
             if len(tem_route_info) > 0:
                 b.append(tem_route_info)
         if len(b) > 0:
@@ -428,7 +428,7 @@ def CountIdleRiders(riders, now_t , interval = 10, return_type = 'class'):
     return idle_riders, len(interval_riders)
 
 
-def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0, platform_exp_error = 1):
+def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0, platform_exp_error = 1, new_type = False):
     """
     Construct unpicked_orders with bundled customer
     :param bundles: constructed bundles
@@ -503,6 +503,196 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
                 order_index += 1
                 #print('추가 정보22 {}'.format(customer_name))
     return res
+
+
+def PlatformOrderRevise2(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0, platform_exp_error = 1, unserved_bundle_order_break = False):
+    """
+    Construct unpicked_orders with bundled customer
+    :param bundles: constructed bundles
+    :param customer_set: customer list : [customer class,...,]
+    :return: unserved customer set
+    """
+    unpicked_orders, num = CountUnpickedOrders(customer_set, 0 , interval = 0, return_type = 'name')
+    bundle_names = []
+    names = []
+    res = {}
+    #info = [[route, max(ftds), average(ftds), min(ftds), names],...,]
+    for info in bundle_infos:
+        bundle_names += info[4]
+        if len(info[4]) == 1:
+            customer = customer_set[info[4][0]]
+            pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
+            customer.platform_exp_cook_time = random.choice(pool)
+            route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
+            o = Order(order_index, info[4][0], route, 'single', fee = customer.fee , parameter_info= None)
+        else:
+            route = []
+            for node in info[0]:
+                if node >= M:
+                    customer_name = node - M
+                    customer = customer_set[customer_name]
+                    route.append([customer_name, 0, customer.store_loc, 0])
+                else:
+                    customer_name = node
+                    customer = customer_set[customer_name]
+                    route.append([customer_name, 1, customer.location, 0])
+            fee = 0
+            for customer_name in info[4]:
+                fee += customer_set[customer_name].fee #주문의 금액 더하기.
+                customer_set[customer_name].in_bundle_time = now_t
+                pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
+                customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
+            o = Order(order_index, info[4], route, 'bundle', fee = fee, parameter_info= info[7:10])
+        o.average_ftd = info[2]
+        res[order_index] = o
+        #res.append(o)
+        order_index += 1
+    for index in platform_set.platform:
+        order = platform_set.platform[index]
+        if order.type == 'single':
+            if order.customers[0] not in bundle_names and order.picked == False and customer_set[order.customers[0]].time_info[1] == None:
+                res[order.index] = order
+            else:
+                pass
+        else:
+            if order.picked == False:
+                #만약 겹치는 부분이 있다면, 이를 비교할 것.
+                if unserved_bundle_order_break == True: #-> 기존에 발생한 번들과 신규 번들 사이에 겹침이 발생할 수 있음.
+                    duplicate_customers = list(set(order.customers).intersection(set(bundle_names)))
+                    if len(duplicate_customers) == 0:
+                        res[order.index] = order
+                    else:
+                        #만약 기존 번들이 더 효과적이라면:
+                        for new_order_index in res:
+                            order = res[new_order_index]
+                            if len(order.customers) > 1:
+                                duplicate_customers = list(set(order.customers).intersection(set(bundle_names)))
+                        #아니라면
+                        for ct_name in order.customers:
+                            if ct_name not in duplicate_customers:
+                                #개별 고객으로 다시 넣어야 함.
+                                customer = customer_set[ct_name]
+                                pool = np.random.normal(customer.cook_info[1][0],customer.cook_info[1][1] * platform_exp_error, 1000)
+                                customer.platform_exp_cook_time = random.choice(pool)
+                                route = [[customer.name, 0, customer.store_loc, 0], [customer.name, 1, customer.location, 0]]
+                                o = Order(order_index, [customer.name], route, 'single', fee=customer.fee,parameter_info=None)
+                                o.average_ftd = 0
+                                res[order_index] = o
+                                order_index += 1
+                        pass
+                    #겹치는 부분이 발생한다면, 이를 삭제.
+                    pass
+                else:
+                    res[order.index] = order
+    already_ordered_customer_names = []
+    for index in res:
+        already_ordered_customer_names += res[index].customers
+    for index in platform_set.platform:
+        already_ordered_customer_names += platform_set.platform[index].customers
+    for customer_name in unpicked_orders:
+        if divide_option == True:
+            condition = customer_name not in already_ordered_customer_names
+        else:
+            condition = customer_name not in bundle_names + already_ordered_customer_names
+        #if customer_name not in bundle_names + already_ordered_customer_names:
+        if condition == True:
+            names.append(customer_name)
+            customer = customer_set[customer_name]
+            if customer.time_info[1] == None:
+                singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
+                o = Order(order_index, [customer_name], singleroute, 'single', fee = customer.fee)
+                #res.append(o)
+                res[order_index] = o
+                order_index += 1
+                #print('추가 정보22 {}'.format(customer_name))
+    return res
+
+def GenSingleOrder(order_index, customer, platform_exp_error = 1):
+    pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
+    customer.platform_exp_cook_time = random.choice(pool)
+    route = [[customer.name, 0, customer.store_loc, 0], [customer.name, 1, customer.location, 0]]
+    o = Order(order_index, customer.name, route, 'single', fee=customer.fee, parameter_info=None)
+    return o
+
+def GenBundleOrder(order_index, bundie_info, customer_set, now_t, M = 1000, platform_exp_error = 1):
+    route = []
+    for node in bundie_info[0]:
+        if node >= M:
+            customer_name = node - M
+            customer = customer_set[customer_name]
+            route.append([customer_name, 0, customer.store_loc, 0])
+        else:
+            customer_name = node
+            customer = customer_set[customer_name]
+            route.append([customer_name, 1, customer.location, 0])
+    fee = 0
+    for customer_name in bundie_info[4]:
+        fee += customer_set[customer_name].fee  # 주문의 금액 더하기.
+        customer_set[customer_name].in_bundle_time = now_t
+        pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
+        customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
+    o = Order(order_index, bundie_info[4], route, 'bundle', fee=fee, parameter_info=bundie_info[7:10])
+    o.average_ftd = bundie_info[2]
+    return o
+
+def PlatformOrderRevise3(bundle_infos, customer_set, order_index, platform_set, M = 1000, divide_option = False, now_t = 0, platform_exp_error = 1, unserved_bundle_order_break = False):
+    """
+    Construct unpicked_orders with bundled customer
+    :param bundles: constructed bundles
+    :param customer_set: customer list : [customer class,...,]
+    :return: unserved customer set
+    """
+    #1 단건 주문 먼저 오더에 넣기
+    res = {}
+    for info in bundle_infos:
+        if len(info[4]) == 1:
+            customer = customer_set[info[4][0]]
+            o = GenSingleOrder(order_index, customer)
+            res[order_index] = o
+            order_index += 1
+    for order_index in platform_set.platform:
+        order = platform_set.platform[order_index]
+        if len(order.customers) == 1:
+            res[order.index] = order
+    #2번들 처리
+    if unserved_bundle_order_break == False:
+        for info in bundle_infos:
+            if len(info[4]) > 1:
+                o = GenBundleOrder(order_index, info, customer_set, now_t)
+                res[order_index] = o
+        for order_index in platform_set.platform:
+            order = platform_set.platform[order_index]
+            if len(order.customers) > 1:
+                res[order.index] = order
+    else:
+        bundle_infos = []
+        for info in bundle_infos:
+            if len(info[4]) > 1:
+                o = GenBundleOrder(order_index, info, customer_set, now_t)
+                bundle_infos.append(o)
+        for order_index in platform_set.platform:
+            order = platform_set.platform[order_index]
+            if len(order.customers) > 1:
+                bundle_infos.append(order)
+        bundle_infos.sort(key=operator.attrgetter('parameter_info'), reverse=True)
+        bundle_ct_names = []
+        for order1 in bundle_infos:
+            for order2 in bundle_infos:
+                if order1.order_index == order2.order_index:
+                    duplicate_customers = list(set(order1.customers).intersection(set(bundle_ct_names)))
+                    if duplicate_customers == 0:
+                        bundle_ct_names.append(order1.customers)
+                        res[order1.index] = order1
+                    else:#겹치는 고객이 존재시.
+                        for ct_name in duplicate_customers:
+                            customer = customer_set[ct_name]
+                            o = GenSingleOrder(order_index, customer)
+                            res[order_index] = o
+                            bundle_ct_names.append(ct_name)
+                            order_index += 1
+        #1 겹치는 고객이 존재하는 경우 더 앞의 것 부터 정렬
+    return res
+
 
 
 def ConsideredCustomer(platform_set, orders, unserved_order_break = False):
@@ -642,7 +832,14 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
-def ResultPrint(name, customers, speed = 1):
+def ResultPrint(name, customers, speed = 1, riders = None):
+    rider_income_var = None
+    if riders != None:
+        riders_incomes = []
+        for rider_name in riders:
+            rider = riders[rider_name]
+            riders_incomes.append(rider.income)
+        rider_income_var = np.var(riders_incomes)
     served_customer = []
     TLT = []
     FLT = []
@@ -656,6 +853,7 @@ def ResultPrint(name, customers, speed = 1):
             TLT.append(lt)
             FLT.append(flt)
             MFLT.append(mflt)
+    customer_lead_time_var = np.var(TLT)
     try:
         served_ratio = round(len(TLT)/len(customers),2)
         av_TLT = round(sum(TLT)/len(TLT),2)
@@ -663,7 +861,7 @@ def ResultPrint(name, customers, speed = 1):
         av_MFLT = av_FLT - round(sum(MFLT)/len(MFLT),2)
         print('시나리오 명 {} 전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(name, len(customers), len(TLT),served_ratio,av_TLT,
                                                                              av_FLT, av_MFLT))
-        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT]
+        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var]
     except:
         print('TLT 수:  {}'.format(len(TLT)))
         return None

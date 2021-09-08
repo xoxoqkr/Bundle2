@@ -2,7 +2,7 @@
 
 #from scipy.stats import poisson
 import time
-from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,RequiredBreakBundleNum, BreakBundle
+from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3
 from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount
 import copy
 
@@ -197,7 +197,7 @@ def Platform_process2(env, platform_set, orders, riders, p2,thres_p,interval, sp
         yield env.timeout(interval)
 
 
-def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_search_option = False, speed = 1, end_t = 1000, unserved_order_break = True, divide_option = False, platform_exp_error = 1, min_pr = 0.05, scoring_type = 'myopic'):
+def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False, speed = 1, end_t = 1000, unserved_bundle_order_break = True, divide_option = False, platform_exp_error = 1, min_pr = 0.05, scoring_type = 'myopic'):
     while env.now <= end_t:
         now_t = env.now
         unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval = interval ,return_type = 'class') #lamda1
@@ -206,7 +206,7 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
         mu1 = len(idle_riders)
         p = CalculateRho(lamda1, lamda2, mu1, mu2)
         #p = 2
-        rev_order = ConsideredCustomer(platform_set, orders, unserved_order_break = unserved_order_break)
+        rev_order = ConsideredCustomer(platform_set, orders, unserved_order_break = unserved_bundle_order_break)
         print('번들 생성에 고려되는 고객들 {}'.format(sorted(list(rev_order.keys()))))
         if p >= thres_p:
             B = []
@@ -220,7 +220,7 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 start = time.time()
                 target_order = orders[customer_name]
                 selected_bundle = SelectByTwo_sided_way(target_order, riders, orders, stores, platform_set, p2, interval, env.now, min_pr,
-                                                   speed=speed, scoring_type = scoring_type,bundle_search_variant=unserved_order_break, bundle_search_option= bundle_search_option)
+                                                   speed=speed, scoring_type = scoring_type,bundle_permutation_option= bundle_permutation_option,unserved_bundle_order_break=unserved_bundle_order_break)
                 end = time.time()
                 print('고객 당 계산 시간 {}'.format(end - start))
                 print('선택 번들1',selected_bundle)
@@ -243,7 +243,6 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 else:
                     unique_bundles.append(bundle_info[:7])
                     selected_customer_name_check += bundle_info[4]
-            duplicate_customers = []
             for rider_name in riders:
                 rider = riders[rider_name]
                 duplicate_customers = list(set(rider.onhand).intersection(set(selected_customer_name_check)))
@@ -267,6 +266,8 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
             #input('제안되고 있는 고객 들 {} '.format(order_subset_names))
             #todo : 제안된 번들 중에서 특정 번들을 선택하는 과정
             new_orders = PlatformOrderRevise(unique_bundles, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2), platform_exp_error = platform_exp_error)
+            #new_orders = PlatformOrderRevise2(unique_bundles, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2), platform_exp_error = platform_exp_error, unserved_bundle_order_break=unserved_bundle_order_break)
+            #new_orders = PlatformOrderRevise3(unique_bundles, orders, order_index,platform_set, divide_option = divide_option, now_t= round(env.now,2), platform_exp_error = platform_exp_error, unserved_bundle_order_break=unserved_bundle_order_break)
             bundle_names = []
             bundle_check = []
             for index in new_orders:

@@ -13,7 +13,7 @@ import numpy
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
 # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
 class Order(object):
-    def __init__(self, order_name, customer_names, route, order_type, fee = 0):
+    def __init__(self, order_name, customer_names, route, order_type, fee = 0, parameter_info = [0,0,0]):
         self.index = order_name
         self.customers = customer_names
         self.route = route
@@ -21,6 +21,7 @@ class Order(object):
         self.type = order_type #1:단주문, 2:B2, 3:B3
         self.average_ftd = None
         self.fee = fee
+        self.parameter_info = parameter_info
 
 
 
