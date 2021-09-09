@@ -466,6 +466,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
                 pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
                 customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
             o = Order(order_index, info[4], route, 'bundle', fee = fee)
+            o.olf_info = info
         o.average_ftd = info[2]
         res[order_index] = o
         #res.append(o)
@@ -543,6 +544,7 @@ def PlatformOrderRevise2(bundle_infos, customer_set, order_index, platform_set, 
                 pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
                 customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
             o = Order(order_index, info[4], route, 'bundle', fee = fee, parameter_info= info[7:10])
+            o.olf_info = info
         o.average_ftd = info[2]
         res[order_index] = o
         #res.append(o)
@@ -632,6 +634,7 @@ def GenBundleOrder(order_index, bundie_info, customer_set, now_t, M = 1000, plat
         pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
         customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
     o = Order(order_index, bundie_info[4], route, 'bundle', fee=fee, parameter_info=bundie_info[7:10])
+    o.olf_info = bundie_info
     o.average_ftd = bundie_info[2]
     return o
 
@@ -692,6 +695,71 @@ def PlatformOrderRevise3(bundle_infos, customer_set, order_index, platform_set, 
                             order_index += 1
         #1 겹치는 고객이 존재하는 경우 더 앞의 것 부터 정렬
     return res
+
+def PlatformOrderRevise4(bundle_infos, customer_set, platform_set, now_t = 0, unserved_bundle_order_break = False, divide_option = True):
+    """
+    Construct unpicked_orders with bundled customer
+    :param bundles: constructed bundles
+    :param customer_set: customer list : [customer class,...,]
+    :return: unserved customer set
+    """
+    order_indexs = []
+    for index in platform_set.platform:
+        order_indexs.append(index)
+    order_index = 1
+    if len(order_indexs) > 0:
+        order_index = max(order_indexs) + 1
+    #1 단건 주문 먼저 오더에 넣기
+    added_single_customers = []
+    res = {}
+    for info in bundle_infos:
+        if len(info[4]) == 1:
+            customer = customer_set[info[4][0]]
+            o = GenSingleOrder(order_index, customer)
+            res[order_index] = o
+            order_index += 1
+            added_single_customers.append(customer.name)
+    for order_index in platform_set.platform:
+        order = platform_set.platform[order_index]
+        if len(order.customers) == 1:
+            res[order.index] = order
+            added_single_customers += order.customers
+    #2번들 처리
+    for info in bundle_infos:
+        if len(info[4]) > 1:
+            o = GenBundleOrder(order_index, info, customer_set, now_t)
+            res[order_index] = o
+    if unserved_bundle_order_break == False:
+        for order_index in platform_set.platform:
+            order = platform_set.platform[order_index]
+            if len(order.customers) > 1:
+                res[order.index] = order
+    unpicked_orders, interval_orders = CountUnpickedOrders(customer_set, now_t , return_type = 'list')
+    for customer_name in unpicked_orders:
+        if customer_name not in added_single_customers:
+            customer = customer_set[customer_name]
+            o = GenSingleOrder(order_index, customer)
+            res[order_index] = o
+            order_index += 1
+            added_single_customers.append(customer_name)
+    if divide_option == True: #번들에 있는데, 개별 고객이 없는 경우를 추가
+        in_bundle_customers = []
+        single_order_customers = []
+        for order_index in res:
+            order = res[order_index]
+            if order.type == 'bundle':
+                in_bundle_customers += order.customers
+            else:
+                single_order_customers += order.customers
+        for customer_name in in_bundle_customers:
+            if customer_name not in single_order_customers:
+                customer = customer_set[customer_name]
+                o = GenSingleOrder(order_index, customer)
+                res[order_index] = o
+                order_index += 1
+                single_order_customers.append(customer_name)
+    return res
+
 
 
 

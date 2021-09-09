@@ -206,6 +206,37 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
         #print('현재 {} 플랫폼 주문 수 {}'.format(int(env.now), len(platform)))
         name += 1
 
+def ReadRiderData(env, rider_data, Platform, Rider_dict, Customer_dict, Store_dict):
+    #저장된 txt 데이터를 읽고, 그에 따라서 인스턴스 생성
+    #rider_data = [name, start_loc, gen_time, ExpectWagePerHr]
+    #order_data = [name, store_num, loc , gen_time]
+    #stroe_data = [name, capacity, loc]
+    f = open(rider_data + ".txt", 'r')
+    lines = f.readlines()
+    rider_num = 1
+    for line in lines[1:]:
+        line.split('')
+        single_rider = Class.Rider(env, rider_num, Platform, Customer_dict, Store_dict, start_time = env.now, speed = speed, end_t = working_duration,\
+                                   capacity = capacity, freedom = freedom, order_select_type = score_type, wait_para = wait_para, uncertainty = uncertainty\
+                                   exp_error = exp_error)
+        single_rider.exp_wage = exp_WagePerHr
+        Rider_dict[rider_num] = single_rider
+        interval = 1
+        rider_num += 1
+        yield env.timeout(interval)
+
+    f.close()
+    return None
+
+
+def ReadCustomerData():
+    pass
+
+
+def ReadStoreData():
+    pass
+
+
 def UpdatePlatformByOrderSelection(platform, order_index):
     """
     선택된 주문과 겹치는 고객을 가지는 주문이 플랫폼에 존재한다면, 해당 주문을 삭제하는 함수.

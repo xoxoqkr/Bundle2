@@ -229,6 +229,7 @@ def BundleConsideredCustomers(target_order, platform, riders, customers, speed =
             input('ERROR {} :: 고려 고객 {} 제외1 {} 제외 2 {}'.format(ct_name, not_served_ct_names, rider_on_hand, rider_finished))
         else:
             res[ct_name] = customers[ct_name]
+    res[target_order.name] = target_order
     return res
 
 
@@ -332,6 +333,102 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
         return res
     else:
         return None
+
+
+def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, thres = 0.1, speed = 1, bundle_permutation_option = False, unserved_bundle_order_break = True, s = 3, scoring_type = 'myopic',input_data = None):
+    """
+    주어진 feasible bundle(혹은 target order를 기준으로 탐색된 feasible bundle)에
+    대해서 s,e,d 점수가 높은 번들을 선택 후 제안.
+    @param target_order: 탐색의 기준이 되는 주문
+    @param riders: RIDER CLASS DICT
+    @param orders: CUSTOMER CLASS DICT
+    @param stores: STORE CLASS DICT
+    @param platform: PLATFORM CLASS DICT
+    @param p2: max FLT(고객 시간 제한)
+    @param t:다음 주문이 발생할 것으로 예상되는 시간 간격
+    @param t_now: 현재 시간
+    @param min_pr: 라이더 주문 탐색 확률 최솟 값(이 값보다 확률이 작은 경우는 계산에 고려X)
+    @param speed: 차량 속도
+    @param bundle_search_variant: 번들 탐색시 대상이 되는 고객들 결정 (True : 기존에 번들의 고객들은 고려 X , False : 기존 번들의 고객도  고려)
+    @param s: 고려되는 번들 크기 default = 3
+    @param input_data: feasible_bundles을 외부에서 계산하는 경우에 데이터 입력
+    @return:
+    """
+
+    """
+    considered_customers = {}
+    for customer_name in orders:
+        customer = orders[customer_name]
+        if customer.time_info[1] == True:
+            continue
+        else:
+            if order.type == 'single':
+                considered_customers[customer_name] = order
+            else:
+                if bundle_search_variant == False:
+                    considered_customers[customer_name] = order
+                else:
+                    pass    
+    """
+    if input_data == None:
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed, bundle_permutation_option = bundle_permutation_option)
+        B2 = ConstructFeasibleBundle_TwoSided(target_order, orders, s - 1, p2, speed=speed,bundle_permutation_option=bundle_permutation_option)
+        feasible_bundles = B2 + B3
+        if len(feasible_bundles) > 0:
+            comparable_b = []
+            feasible_bundles.sort(key=operator.itemgetter(6))  # s_b 순으로 정렬  #target order를 포함하는 모든 번들에 대해서 s_b를 계산.
+            b_star = feasible_bundles[0][6]
+            for ele in feasible_bundles:
+                if (ele[6] - b_star) / b_star <= thres:  # percent loss 가 thres 보다 작아야 함.
+                    comparable_b.append(ele)
+            feasible_bundles = comparable_b
+        #input('input_data == None :: ## {}'.format(len(feasible_bundles)))
+    else:
+        feasible_bundles = input_data
+        #print('input_data != None')
+    count = 0
+    scores = []
+    for feasible_bundle in feasible_bundles:
+        s = feasible_bundle[6]
+        e_pool = []
+        d_pool = []
+        e = 0
+        d = 0
+        #print('Two_sidedScore 시작')
+        if scoring_type == 'two_sided':
+            #print('Two_sidedScore 시작')
+            #start = time.time()
+            try:
+                e,d = Two_sidedScore(feasible_bundle, riders, orders, stores, platform, t, t_now, min_pr, M=1000, sample_size=1000)
+                #end = time.time()
+                #print('계산 시간 {}'.format(end - start))
+                e_pool.append(e)
+                d_pool.append(d)
+            except:
+                e = 1000000
+                d = 1000000
+                pass
+            #print('s {} e {} d {} 계산 완료 '.format(s, e,d))
+        #print('얼마나 다른가? e{} d{} '.format(list(set(e_pool)), list(set(d_pool))))
+        scores.append([count, s,e,d,0])
+        count += 1
+    scores.sort(key = operator.itemgetter(1), reverse = True)
+    #input('계산 완료 ')
+    if scoring_type == 'myopic':
+        sorted_scores = scores
+    else:
+        sorted_scores = ParetoDominanceCount(scores, 0, 2, 3, 4, strict_option = False)
+        print('scored datas :: {}'.format(sorted_scores))
+    #return sorted_scores[0], feasible_bundles[sorted_scores[0][0]]
+    if len(feasible_bundles) > 0:
+        res = feasible_bundles[sorted_scores[0][0]] + sorted_scores[0][1:4] + [0]
+        #input('res {}'.format(res))
+        #return feasible_bundles[sorted_scores[0][0]]
+        return res
+    else:
+        return None
+
+
 
 def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, bundle_permutation_option = False, uncertainty = False, platform_exp_error = 1):
     """

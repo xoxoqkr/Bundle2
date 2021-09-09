@@ -2,9 +2,12 @@
 
 #from scipy.stats import poisson
 import time
-from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3
-from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount
+from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,\
+    RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4
+from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2
 import copy
+import operator
+from Bundle_selection_problem import Bundle_selection_problem
 
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1, bundle_select_type = 'normal'):
     B2 = []
@@ -297,6 +300,94 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 platform_set.platform = BreakBundle(break_info, platform_set, orders)
                 #input('확인 3 {}'.format(platform_set.platform))
         past_customer_num = copy.deepcopy(len(orders))
+        print('T: {} B2,B3확인'.format(int(env.now)))
+        #input('T: {} B2,B3확인'.format(int(env.now)))
+        yield env.timeout(interval)
+
+def LamdaMuCalculate(orders, riders, now_t, interval = 5, return_type = 'class'):
+    unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval=interval, return_type=return_type)  # lamda1
+    lamda1 = len(unpicked_orders)
+    idle_riders, mu2 = CountIdleRiders(riders, now_t, interval=interval, return_type=return_type)
+    mu1 = len(idle_riders)
+    return lamda1, lamda2, mu1, mu2
+
+def NewCustomer(cusotmers, now_t, interval = 5):
+    new_customer_names = []
+    for customer_name in cusotmers:
+        customer = cusotmers[customer_name]
+        if now_t - interval <= customer.time_info[0] and customer.time_info[1] == None:
+            new_customer_names.append(customer.name)
+    return new_customer_names
+
+def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False, speed = 1, end_t = 1000, min_pr = 0.05, divide_option = False,\
+                      unserved_bundle_order_break = True,  scoring_type = 'myopic',bundle_selection_type = 'greedy', considered_customer_type = 'new'):
+    while env.now <= end_t:
+        now_t = env.now
+        lamda1, lamda2, mu1, mu2 = LamdaMuCalculate(orders, riders, now_t, interval=interval, return_type='class')
+        p = CalculateRho(lamda1, lamda2, mu1, mu2)
+        if p >= thres_p:
+            B = []
+            if considered_customer_type == 'new':
+                considered_customers_names = NewCustomer(orders, now_t, interval = interval)
+            else:
+                considered_customers_names, interval_orders = CountUnpickedOrders(orders, now_t, interval = interval,  return_type='list')
+            #print('새로 생긴 고객들 {}'.format(new_customer_names))
+            for customer_name in considered_customers_names:
+                start = time.time()
+                target_order = orders[customer_name]
+                considered_customers = BundleConsideredCustomers(target_order, platform_set, riders, orders,
+                                                                 bundle_search_variant=unserved_bundle_order_break,
+                                                                 d_thres_option=True, speed=speed)
+                selected_bundle = SelectByTwo_sided_way2(target_order, riders, considered_customers, stores, platform_set, p2, interval, env.now, min_pr, speed=speed, \
+                                                         scoring_type = scoring_type,bundle_permutation_option= bundle_permutation_option,\
+                                                         unserved_bundle_order_break=unserved_bundle_order_break)
+                end = time.time()
+                print('고객 당 계산 시간 {} : 선택 번들1 {}'.format(end - start, selected_bundle))
+                # selected_bundle 구조 : [(1151, 1103, 103, 151), 16.36, 10.69, 5.03, [103, 151], 16.36, 23.1417, 23.1417(s), 1000000(e), 1000000(d), 0]
+                if selected_bundle != None:
+                    B.append(selected_bundle)
+            #Part2 기존에 제시되어 있던 번들 중 새롭게 구성된 번들과 겹치는 부분이 있으면 삭제해야 함.
+            if unserved_bundle_order_break == False:
+                pass
+                #기존 번들을 추가하는 부분.
+            else:
+                for order_index in platform_set.platform:
+                    order = platform_set.platform[order_index]
+                    if order.type == 'bundle':
+                        B.append(order.old_info)
+            if scoring_type == 'myopic':
+                B.sort(key = operator.itemgetter(7))
+            else:
+                B = ParetoDominanceCount(B, 0, 8, 9, 10, strict_option = False)
+            #Part 2 -1 Greedy한 방식으로 선택
+            selected_customer_name_check = [] #P의 확인용
+            unique_bundles = [] #P의 역할
+            if bundle_selection_type == 'greedy':
+                for bundle_info in B:
+                    duplicate = False
+                    for ct_name in bundle_info[4]:
+                        if ct_name in selected_customer_name_check:
+                            duplicate = True
+                            break
+                    if duplicate == True:
+                        continue
+                    else:
+                        unique_bundles.append(bundle_info[:7])
+                        selected_customer_name_check += bundle_info[4]
+            else: # set cover problem 풀이
+                feasiblity, unique_bundles = Bundle_selection_problem(B)
+            #part 3 Upload P
+            #todo : PlatformOrderRevise 를 손볼 것.
+            new_orders = PlatformOrderRevise4(unique_bundles, orders, platform_set, now_t = now_t, unserved_bundle_order_break = unserved_bundle_order_break, divide_option = divide_option)
+            platform_set.platform = new_orders
+        else: #Break the offered bundle
+            print('ELSE 문 실행')
+            org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform_set, lamda2, mu1, mu2, thres=thres_p)
+            if sum(rev_bundle_num) < sum(org_bundle_num):
+                break_info = [org_bundle_num[0] - rev_bundle_num[0],org_bundle_num[1] - rev_bundle_num[1]] #[B2 해체 수, B3 해체 수]
+                #번들의 해체가 필요
+                platform_set.platform = BreakBundle(break_info, platform_set, orders)
+                #input('확인 3 {}'.format(platform_set.platform))
         print('T: {} B2,B3확인'.format(int(env.now)))
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)

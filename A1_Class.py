@@ -22,7 +22,7 @@ class Order(object):
         self.average_ftd = None
         self.fee = fee
         self.parameter_info = parameter_info
-
+        self.old_info
 
 
 class Rider(object):
