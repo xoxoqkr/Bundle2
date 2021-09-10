@@ -4,10 +4,10 @@
 import time
 from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,\
     RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4
-from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2
+from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore
 import copy
 import operator
-from Bundle_selection_problem import Bundle_selection_problem
+from Bundle_selection_problem import Bundle_selection_problem, Bundle_selection_problem2
 
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1, bundle_select_type = 'normal'):
     B2 = []
@@ -200,7 +200,9 @@ def Platform_process2(env, platform_set, orders, riders, p2,thres_p,interval, sp
         yield env.timeout(interval)
 
 
-def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False, speed = 1, end_t = 1000, unserved_bundle_order_break = True, divide_option = False, platform_exp_error = 1, min_pr = 0.05, scoring_type = 'myopic'):
+def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False,
+                      speed = 1, end_t = 1000, unserved_bundle_order_break = True, divide_option = False,
+                      platform_exp_error = 1, min_pr = 0.05, scoring_type = 'myopic'):
     while env.now <= end_t:
         now_t = env.now
         unpicked_orders, lamda2 = CountUnpickedOrders(orders, now_t, interval = interval ,return_type = 'class') #lamda1
@@ -223,7 +225,8 @@ def Platform_process3(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 start = time.time()
                 target_order = orders[customer_name]
                 selected_bundle = SelectByTwo_sided_way(target_order, riders, orders, stores, platform_set, p2, interval, env.now, min_pr,
-                                                   speed=speed, scoring_type = scoring_type,bundle_permutation_option= bundle_permutation_option,unserved_bundle_order_break=unserved_bundle_order_break)
+                                                   speed=speed, scoring_type = scoring_type,bundle_permutation_option= bundle_permutation_option,
+                                                        unserved_bundle_order_break=unserved_bundle_order_break)
                 end = time.time()
                 print('고객 당 계산 시간 {}'.format(end - start))
                 print('선택 번들1',selected_bundle)
@@ -343,7 +346,7 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
                                                          unserved_bundle_order_break=unserved_bundle_order_break)
                 end = time.time()
                 print('고객 당 계산 시간 {} : 선택 번들1 {}'.format(end - start, selected_bundle))
-                # selected_bundle 구조 : [(1151, 1103, 103, 151), 16.36, 10.69, 5.03, [103, 151], 16.36, 23.1417, 23.1417(s), 1000000(e), 1000000(d), 0]
+                # selected_bundle 구조 : [(1151, 1103, 103, 151), 16.36, 10.69, 5.03, [103, 151], 16.36, 23.1417(s), 23.1417(s), 1000000(e), 1000000(d), 0]
                 if selected_bundle != None:
                     B.append(selected_bundle)
             #Part2 기존에 제시되어 있던 번들 중 새롭게 구성된 번들과 겹치는 부분이 있으면 삭제해야 함.
@@ -354,28 +357,39 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 for order_index in platform_set.platform:
                     order = platform_set.platform[order_index]
                     if order.type == 'bundle':
+                        print('확인 {}'.format(order.old_info))
+                        order.old_info += [order.old_info[6]]
+                        e,d = Two_sidedScore(order.old_info, riders, orders, stores, platform_set , interval, now_t, min_pr, M=1000,
+                                       sample_size=1000, platform_exp_error=1)
+                        order.old_info += [e,d,0]
                         B.append(order.old_info)
-            if scoring_type == 'myopic':
-                B.sort(key = operator.itemgetter(7))
-            else:
-                B = ParetoDominanceCount(B, 0, 8, 9, 10, strict_option = False)
-            #Part 2 -1 Greedy한 방식으로 선택
-            selected_customer_name_check = [] #P의 확인용
             unique_bundles = [] #P의 역할
-            if bundle_selection_type == 'greedy':
-                for bundle_info in B:
-                    duplicate = False
-                    for ct_name in bundle_info[4]:
-                        if ct_name in selected_customer_name_check:
-                            duplicate = True
-                            break
-                    if duplicate == True:
-                        continue
-                    else:
-                        unique_bundles.append(bundle_info[:7])
-                        selected_customer_name_check += bundle_info[4]
-            else: # set cover problem 풀이
-                feasiblity, unique_bundles = Bundle_selection_problem(B)
+            if len(B) > 0:
+                if scoring_type == 'myopic':
+                    print('정렬 정보{}'.format(B))
+                    B.sort(key = operator.itemgetter(6)) #todo : search index 확인
+                else:
+                    B = ParetoDominanceCount(B, 0, 8, 9, 10, strict_option = False)
+                #Part 2 -1 Greedy한 방식으로 선택
+                selected_customer_name_check = [] #P의 확인용
+                #unique_bundles = [] #P의 역할
+                if bundle_selection_type == 'greedy':
+                    for bundle_info in B:
+                        duplicate = False
+                        for ct_name in bundle_info[4]:
+                            if ct_name in selected_customer_name_check:
+                                duplicate = True
+                                break
+                        if duplicate == True:
+                            continue
+                        else:
+                            unique_bundles.append(bundle_info[:7])
+                            selected_customer_name_check += bundle_info[4]
+                else: # set cover problem 풀이
+                    #input('문제 풀이 시작:: B {}'.format(B))
+                    #feasiblity, unique_bundles = Bundle_selection_problem(B)
+                    feasiblity, unique_bundles = Bundle_selection_problem2(B)
+                    print('결과확인 {} : {}'.format(feasiblity, unique_bundles))
             #part 3 Upload P
             #todo : PlatformOrderRevise 를 손볼 것.
             new_orders = PlatformOrderRevise4(unique_bundles, orders, platform_set, now_t = now_t, unserved_bundle_order_break = unserved_bundle_order_break, divide_option = divide_option)

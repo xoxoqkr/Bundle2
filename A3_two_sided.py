@@ -371,6 +371,7 @@ def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t
                     pass    
     """
     if input_data == None:
+        print('대상 고객 이름 {} 대상 수 {}'.format(target_order.name, len(orders)))
         B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed, bundle_permutation_option = bundle_permutation_option)
         B2 = ConstructFeasibleBundle_TwoSided(target_order, orders, s - 1, p2, speed=speed,bundle_permutation_option=bundle_permutation_option)
         feasible_bundles = B2 + B3
@@ -382,12 +383,13 @@ def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t
                 if (ele[6] - b_star) / b_star <= thres:  # percent loss 가 thres 보다 작아야 함.
                     comparable_b.append(ele)
             feasible_bundles = comparable_b
-        #input('input_data == None :: ## {}'.format(len(feasible_bundles)))
+        print('input_data == None :: ## {}'.format(len(feasible_bundles)))
     else:
         feasible_bundles = input_data
-        #print('input_data != None')
+        print('input_data != None')
     count = 0
     scores = []
+    print('대상 번들들 {}'.format(feasible_bundles))
     for feasible_bundle in feasible_bundles:
         s = feasible_bundle[6]
         e_pool = []
@@ -473,23 +475,26 @@ def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, 
     for customer_name in orders:
         if customer_name != target_order.name:
             d.append(customer_name)
-    #input('대상 고객 {} 고려 고객들 {} '.format(target_order.name, d))
+    print('대상 고객 {} 고려 고객들 {} '.format(target_order.name, d))
     if len(d) > s - 1:
         M = itertools.permutations(d, s - 1)
         b = []
         for m in M:
+            #print(list(m))
             q = list(m) + [target_order.name]
             subset_orders = []
             time_thres = 0 #3개의 경로를 연속으로 가는 것 보다는
             for name in q:
                 subset_orders.append(orders[name])
                 time_thres += orders[name].distance/speed
+            #print('확인 1 {} : 확인2 {}'.format(subset_orders, time_thres))
             tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, bundle_permutation_option= bundle_permutation_option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_return = True)
             if len(tem_route_info) > 0:
                 OD_pair_dist = MIN_OD_pair(orders, q, s)
                 for info in tem_route_info:
                     info.append((OD_pair_dist - info[5] / s))
             b += tem_route_info
+        #print('경우의 수 {} 가능 번들 수 {} : 정보 d {} s {}'.format(len(list(M)), len(b), d, s))
         comparable_b = []
         if len(b) > 0:
             b.sort(key=operator.itemgetter(6))  # s_b 순으로 정렬  #target order를 포함하는 모든 번들에 대해서 s_b를 계산.

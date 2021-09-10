@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+import csv
 
 import simpy
 import random
 
 from astropy import uncertainty
 
-from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave
+from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave, SaveInstanceAsCSV
 from A1_Class import Store, Platform_pool
 from A2_Func import Platform_process, ResultPrint
 import operator
@@ -16,7 +17,7 @@ import matplotlib.pyplot as plt
 #Parameter define
 order_interval = 1.1
 interval = 5
-run_time = 200
+run_time = 150
 cool_time = 30 #run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True #음식 주문 불확실성 고려
 rider_exp_error = 1.5 #라이더가 가지는 불확실성
@@ -73,6 +74,8 @@ f.close()
 #infos = [['B',True, True, 'myopic', True],['C',True, False, 'myopic', True]]
 infos = [['C',True, False, 'myopic', True],['C',True, False, 'two_sided', True]]
 #infos = [['C',True, False, 'myopic', True]]
+infos = [['C',False, False, 'myopic', True]]
+run_para = False #True : 시뮬레이션 작동 #False 데이터 저장용
 for info in infos:
     sc = scenario(info[0], info[1], info[2], info[3], info[4])
     scenarios.append(sc)
@@ -107,7 +110,7 @@ for ite in range(ITE_NUM):
                                    interval=rider_gen_interval, runtime=run_time, gen_num=rider_num,
                                    capacity=rider_capacity, history= rider_history, score_type= score_type, wait_para= wait_para, uncertainty = uncertainty_para, exp_error = rider_exp_error))
         env.process(Ordergenerator(env, Orders, Store_dict, max_range= customer_max_range, interval=order_interval, history = order_history,runtime= run_time - cool_time, p2 = order_p2, p2_set= p2_set, speed= rider_speed, cooking_time = cooking_time, cook_time_type= cook_time_type))
-        if sc.platform_work == True:
+        if run_para == True and sc.platform_work == True:
             """
             env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
@@ -119,7 +122,7 @@ for ite in range(ITE_NUM):
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed)
         sc.res.append(res)
-        if index == 0:
+        if run_para == True and index == 0:
         #필요한 정보 저장
             rider_history = []
             rider_gen_times = []
@@ -212,7 +215,8 @@ for ite in range(ITE_NUM):
         sub_info = 'divide_option : {}, p2: {}, divide_option: {}, unserved_order_break : {}'.format(divide_option, p2,sc.platform_work, sc.unserved_order_break)
         ResultSave(Rider_dict, Orders, title='Test', sub_info= sub_info, type_name= sc.name)
         #input('저장 확인')
-
+    #시나리오 저장
+    SaveInstanceAsCSV(Rider_dict, Orders,Store_dict, instance_name = str(ite) )
 for sc in scenarios:
     count = 1
     for res_info in sc.res:

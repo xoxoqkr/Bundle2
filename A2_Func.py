@@ -728,6 +728,7 @@ def PlatformOrderRevise4(bundle_infos, customer_set, platform_set, now_t = 0, un
     for info in bundle_infos:
         if len(info[4]) > 1:
             o = GenBundleOrder(order_index, info, customer_set, now_t)
+            o.old_info = info
             res[order_index] = o
     if unserved_bundle_order_break == False:
         for order_index in platform_set.platform:

@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import math
 import random
-
+import csv
 import numpy.random
-
 import A1_Class as Class
 import time
 
@@ -157,6 +156,54 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
         rider_num += 1
 
 
+def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000):
+    """
+    Generate the rider until t <= runtime and rider_num<= gen_num
+    :param env: simpy environment
+    :param Rider_dict: 플랫폼에 있는 라이더들 {[KY]rider name : [Value]class rider, ...}
+    :param rider_name: 라이더 이름 int+
+    :param Platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+    :param Store_dict: 플랫폼에 올라온 가게들 {[KY]store name : [Value]class store, ...}
+    :param Customer_dict:발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+    :param working_duration: 운행 시작 후 운행을 하는 시간
+    :param interval: 라이더 생성 간격
+    :param runtime: 시뮬레이션 동작 시간
+    :param gen_num: 생성 라이더 수
+    """
+    datas = ReadCSV(csv_dir, interval_index = 1)
+    interval_index = len(datas[0]) - 1
+    for data in datas:
+        name = data[0]
+        speed = data[2]
+        capacity = data[4]
+        freedom = data[5]
+        order_select_type = data[6]
+        wait_para = data[7]
+        uncertainty = data[8]
+        exp_error = data[9]
+        single_rider = Class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
+                                   capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
+        single_rider.exp_wage = exp_WagePerHr
+        Rider_dict[name] = single_rider
+        interval = data[interval_index]
+        if interval > 0:
+            yield env.timeout(interval)
+        else:
+            print('현재 T :{} / 마지막 고객 {} 생성'.format(int(env.now), name))
+
+
+
+def GenerateStoreByCSV(env, csv_dir, platform,Store_dict):
+    datas = ReadCSV(csv_dir)
+    for data in datas:
+        #['name', 'start_loc_x', 'start_loc_y', 'order_ready_time', 'capacity', 'slack']
+        name = data[0]
+        loc = [data[1], data[2]]
+        order_ready_time = data[3]
+        capacity = data[4]
+        slack = data[5]
+        store = Class.Store(env, platform, name, loc=loc, order_ready_time=order_ready_time, capacity=capacity, print_para=False, slack = slack)
+        Store_dict[name] = store
 
 
 def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 100, history = None, p2 = 15, p2_set = False, speed = 4, cooking_time = [2,5], cook_time_type = 'random'):
@@ -206,6 +253,72 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
         #print('현재 {} 플랫폼 주문 수 {}'.format(int(env.now), len(platform)))
         name += 1
 
+
+def ReadCSV(csv_dir, interval_index = None):
+    raw_datas = []
+    datas = []
+    #csv 파일 읽기
+    f = open(csv_dir+'.csv','r')
+    rdr = csv.reader(f)
+    for line in rdr:
+        raw_datas.append(line)
+    f.close()
+    for raw_data in raw_datas[1:]:
+        tem = []
+        for info in raw_data:
+            try:
+                num = float(info)
+                if round(num) == num:
+                    tem.append(int(num))
+                else:
+                    tem.append(num)
+            except:
+                tem.append(str(info))
+        datas.append(tem)
+    if interval_index != None:
+        for index in range(1, len(datas)):
+            interval = datas[index][interval_index] - datas[index - 1][interval_index]
+            datas[index - 1].append(interval)
+        datas[-1].append(0)
+    return datas
+
+def OrdergeneratorByCSV(env, csv_dir, orders, stores):
+    """
+    Generate customer order
+    :param env: Simpy Env
+    :param orders: Order
+    :param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+    :param stores: 플랫폼에 올라온 가게들 {[KY]store name : [Value]class store, ...}
+    :param interval: 주문 생성 간격
+    :param runtime: 시뮬레이션 동작 시간
+    """
+    #CSV 파일 읽기
+    datas = ReadCSV(csv_dir, interval_index = 1)
+    interval_index = len(datas[0]) - 1
+    for data in datas:
+        #[customer.name, customer.time_info[0], customer.location[0],customer.location[1], customer.store, customer.store_loc[0],customer.store_loc[1], customer.p2, customer.cook_time, customer.cook_info[0], customer.cook_info[1][0], customer.cook_info[1][1]]
+        name = data[0]
+        gen_t = data[1]
+        input_location = [data[2],data[3]]
+        store_num = data[4]
+        store_loc = [data[5], data[6]]
+        p2 = data[7]
+        cook_time = data[8]
+        cook_time_type = data[9]
+        cooking_time = [data[10], data[11]]
+        order = Class.Customer(env, name, input_location, store=store_num, store_loc=store_loc, p2=p2,
+                               cooking_time=cook_time, cook_info=[cook_time_type, cooking_time])
+        orders[name] = order
+        stores[store_num].received_orders.append(orders[name])
+        interval = data[interval_index]
+        if interval > 0:
+            yield env.timeout(interval)
+        else:
+            print('현재 T :{} / 마지막 고객 {} 생성'.format(int(env.now), name))
+            pass
+
+
+
 def ReadRiderData(env, rider_data, Platform, Rider_dict, Customer_dict, Store_dict):
     #저장된 txt 데이터를 읽고, 그에 따라서 인스턴스 생성
     #rider_data = [name, start_loc, gen_time, ExpectWagePerHr]
@@ -216,11 +329,13 @@ def ReadRiderData(env, rider_data, Platform, Rider_dict, Customer_dict, Store_di
     rider_num = 1
     for line in lines[1:]:
         line.split('')
+        """
         single_rider = Class.Rider(env, rider_num, Platform, Customer_dict, Store_dict, start_time = env.now, speed = speed, end_t = working_duration,\
                                    capacity = capacity, freedom = freedom, order_select_type = score_type, wait_para = wait_para, uncertainty = uncertainty\
                                    exp_error = exp_error)
-        single_rider.exp_wage = exp_WagePerHr
-        Rider_dict[rider_num] = single_rider
+        single_rider.exp_wage = exp_WagePerHr      
+        Rider_dict[rider_num] = single_rider          
+        """
         interval = 1
         rider_num += 1
         yield env.timeout(interval)
@@ -371,3 +486,45 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
             if count == len(info):
                 f.write('\n')
     f.close()
+
+
+def SaveInstanceAsCSV(Rider_dict, Orders,Store_dict, instance_name = '' ):
+    #시나리오 저장
+    rider_header = ['name', 'start time', 'speed', 'end', 'capacity', 'freedom', 'order_select_type', 'wait_para', 'uncertainty', 'exp_error']
+    saved_rider_infos = []
+    saved_rider_infos.append(rider_header)
+    for rider_name in Rider_dict:
+        rider = Rider_dict[rider_name]
+        tem = [rider.name, rider.start_time, rider.speed, rider.end_t, rider.capacity, rider.freedom, rider.order_select_type, rider.wait_para, rider.uncertainty, rider.exp_error]
+        tem1 = []
+        for info in tem:
+            #tem1.append(';')
+            tem1.append(info)
+            #tem1.append(';')
+        saved_rider_infos.append(tem)
+    customer_header = ['name','gen t', 'loc_x', 'loc_y', 'store', 'store_x', 'store_y', 'p2', 'cook_time', 'cook_time_type','cook_time_s','cook_time_e',]
+    saved_customer_infos = []
+    saved_customer_infos.append(customer_header)
+    for customer_name in Orders:
+        customer = Orders[customer_name]
+        tem = [customer.name, customer.time_info[0], customer.location[0],customer.location[1], customer.store, customer.store_loc[0],customer.store_loc[1], customer.p2, customer.cook_time, customer.cook_info[0], customer.cook_info[1][0], customer.cook_info[1][1]]
+        saved_customer_infos.append(tem)
+    store_header = ['name', 'start_loc_x', 'start_loc_y', 'order_ready_time', 'capacity', 'slack']
+    saved_store_infos = []
+    saved_store_infos.append(store_header)
+    for store_name in Store_dict:
+        store = Store_dict[store_name]
+        tem = [store.name,store.location[0],store.location[1], store.order_ready_time, store.capacity, store.slack]
+        saved_store_infos.append(tem)
+    #txt로 저장
+    file_name = ['rider_infos', 'customer_infos', 'store_infos']
+    name_index = 0
+    for infos in [saved_rider_infos, saved_customer_infos, saved_store_infos]:
+        #f = open("TEST" + file_name[name_index] + ".txt", 'w')
+        f = open("Instance" + file_name[name_index] + instance_name +".csv", 'w', newline = '')
+        wr = csv.writer(f)
+        for info in infos:
+            #f.write(str(info) + '\n')
+            wr.writerow(info)
+        f.close()
+        name_index += 1

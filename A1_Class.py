@@ -22,7 +22,7 @@ class Order(object):
         self.average_ftd = None
         self.fee = fee
         self.parameter_info = parameter_info
-        self.old_info
+        self.old_info = None
 
 
 class Rider(object):
@@ -60,6 +60,9 @@ class Rider(object):
         self.exp_error = exp_error
         self.search_lamda = random.randint(2,5)
         self.exp_wage = 0
+        self.freedom = freedom
+        self.order_select_type = order_select_type
+        self.uncertainty = uncertainty
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
 
 
@@ -662,6 +665,20 @@ class Platform_pool(object):
         self.platform = {}
         self.info = []
 
+
+class scenario(object):
+    def __init__(self, name, p1, search_option,  scoring_type = 'myopic',  unserved_bundle_order_break = True, bundle_selection_type = 'greedy', considered_customer_type = 'new'):
+        self.name = name
+        self.platform_work = p1
+        self.res = []
+        self.bundle_search_option = search_option
+        self.store_dir = None
+        self.customer_dir = None
+        self.rider_dir = None
+        self.scoring_type = scoring_type
+        self.unserved_order_break = unserved_bundle_order_break# True면 기존에 있는 번들 고객도 고려, False면 번들에 없는 고객만 고려
+        self.bundle_selection_type = bundle_selection_type
+        self.considered_customer_type = considered_customer_type
 
 def WaitTimeCal1(exp_store_arrive_t, assign_t, exp_cook_time, cook_time, move_t = 0):
     exp_food_ready_t = assign_t + exp_cook_time
