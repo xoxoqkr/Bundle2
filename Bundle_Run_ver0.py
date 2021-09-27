@@ -333,8 +333,8 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
             if considered_customer_type == 'new':
                 considered_customers_names = NewCustomer(orders, now_t, interval = interval)
             else:
-                considered_customers_names, interval_orders = CountUnpickedOrders(orders, now_t, interval = interval,  return_type='list')
-            #print('새로 생긴 고객들 {}'.format(new_customer_names))
+                considered_customers_names, interval_orders = CountUnpickedOrders(orders, now_t, interval = interval,  return_type='name')
+            print('탐색 대상 고객들 {}'.format(considered_customers_names))
             for customer_name in considered_customers_names:
                 start = time.time()
                 target_order = orders[customer_name]

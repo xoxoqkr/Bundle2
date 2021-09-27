@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import csv
-
+import time
 import simpy
 import random
 import copy
@@ -16,7 +16,7 @@ from Bundle_Run_ver0 import Platform_process3, Platform_process4
 # Parameter define
 order_interval = 1.1
 interval = 5
-run_time = 150
+run_time = 120
 cool_time = 30  # run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True  # 음식 주문 불확실성 고려
 rider_exp_error = 1.5  # 라이더가 가지는 불확실성
@@ -32,7 +32,8 @@ rider_num = 5
 rider_gen_interval = 2  # 라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 1
-ITE_NUM = 5
+start_ite = 0
+ITE_NUM = 1
 option_para = True  # True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
 customer_max_range = 50
 store_max_range = 30
@@ -52,6 +53,8 @@ f.close()
 
 infos = [['C',True, False, 'myopic', True]]
 v1 = ['new', 'all']
+#v1 = ['all']
+#v1 = ['new']
 v2 = [True, False]
 v3 = ['myopic', 'two_sided']
 v4 = ['setcover','greedy']
@@ -67,24 +70,9 @@ for i in v1:
                 sc2 = scenario('C', True, True, scoring_type = k, considered_customer_type=i, unserved_bundle_order_break = j, bundle_selection_type = l)
                 scenarios.append(sc2)
 
-"""
-sc_base1 = scenario(info[0], info[1], info[2], info[3], info[4])
-for i in v1:
-    sc_base = copy.deepcopy(sc_base1)
-    sc_base.considered_customer_type = i
-    for j in v2:
-        sc_base.unserved_bundle_order_break = j
-        for k in v3:
-            sc_base.scoring_type = k
-            for l in v4:
-                sc_base.bundle_selection_type = l
-                print('{} : {} : {} : {}'.format(sc_base.considered_customer_type, sc_base.unserved_bundle_order_break, sc_base.scoring_type, sc_base.bundle_selection_type))
-                scenarios.append(sc_base)
-"""
-
 
 #input('확인 {}'.format(len(scenarios)))
-for ite in range(ITE_NUM):
+for ite in range(2, 5):
     # instance generate
     for sc in scenarios:
         print('시나리오 정보 {} : {} : {} : {}'.format(sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type,
@@ -105,7 +93,7 @@ for ite in range(ITE_NUM):
         # run
         env = simpy.Environment()
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
-        env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders))
+        env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed))
         env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict))
         if run_para == True and sc.platform_work == True:
             """
@@ -119,7 +107,7 @@ for ite in range(ITE_NUM):
                                           scoring_type=sc.scoring_type, bundle_selection_type= sc.bundle_selection_type))
 
         env.run(run_time)
-        res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed)
+        res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed, riders = Rider_dict)
         sc.res.append(res)
         #저장 부
         res = []
@@ -134,7 +122,7 @@ for ite in range(ITE_NUM):
             rider = Rider_dict[rider_name]
             res += rider.served
             wait_time += rider.idle_time
-            candis += rider.candidates
+            #candis += rider.candidates
             b_select += rider.b_select
             store_wait_time += rider.store_wait
             bundle_store_wait_time += rider.bundle_store_wait
@@ -155,12 +143,15 @@ for ite in range(ITE_NUM):
         else:
             single_store_wait_time = None
         ave_wait_time = round(wait_time / len(Rider_dict), 2)
-        print(
-            '라이더 수 ;{} ;평균 수행 주문 수 ;{} ;평균 유휴 분 ;{} ;평균 후보 수 {} 평균 선택 번들 수 {} 가게 대기 시간 {} 번들가게대기시간 {} 단건가게대기시간 {} 고객 평균 대기 시간 {}'.format(
-                len(Rider_dict), round(len(res) / len(Rider_dict), 2), round(wait_time / len(Rider_dict), 2),
-                round(sum(candis) / len(candis), 2), b_select / len(Rider_dict),
-                round(store_wait_time / len(Rider_dict), 2), bundle_store_wait_time, single_store_wait_time,
-                wait_time_per_customer))
+        try:
+            print(
+                '라이더 수 ;{} ;평균 수행 주문 수 ;{} ;평균 유휴 분 ;{} ;평균 후보 수 {} 평균 선택 번들 수 {} 가게 대기 시간 {} 번들가게대기시간 {} 단건가게대기시간 {} 고객 평균 대기 시간 {}'.format(
+                    len(Rider_dict), round(len(res) / len(Rider_dict), 2), round(wait_time / len(Rider_dict), 2),
+                    round(sum(candis) / len(candis), 2), b_select / len(Rider_dict),
+                    round(store_wait_time / len(Rider_dict), 2), bundle_store_wait_time, single_store_wait_time,
+                    wait_time_per_customer))
+        except:
+            print('에러 발생으로 프린트 제거')
         res_info = sc.res[-1]
         info = str(sc.name) + ';' + str(ite) + ';' + str(res_info[0]) + ';' + str(res_info[1]) + ';' + str(
             res_info[2]) + ';' + str(res_info[3]) + ';' + str(res_info[4]) + ';' + str(
@@ -174,15 +165,18 @@ for ite in range(ITE_NUM):
                                                                                                      sc.unserved_order_break)
         ResultSave(Rider_dict, Orders, title='Test', sub_info=sub_info, type_name=sc.name)
         # input('저장 확인')
-    # 시나리오 저장
-    #SaveInstanceAsCSV(Rider_dict, Orders, Store_dict, instance_name='res')
-    #결과 저장 부
-    info = [sc.name, sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type, sc.bundle_selection_type, 0, \
-    sc.res[-1][0],sc.res[-1][1], sc.res[-1][2], sc.res[-1][3], sc.res[-1][4], sc.res[-1][5], sc.res[-1][6], sc.res[-1][7], sc.res[-1][8]]
-    f = open("InstanceRES.csv", 'a', newline='')
-    wr = csv.writer(f)
-    wr.writerow(info)
-    f.close()
+        # 시나리오 저장
+        #SaveInstanceAsCSV(Rider_dict, Orders, Store_dict, instance_name='res')
+        #결과 저장 부
+        tm = time.localtime()
+        string = time.strftime('%Y-%m-%d %I:%M:%S %p', tm)
+        info = [string, ite, sc.name, sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type, sc.bundle_selection_type, 0, \
+        sc.res[-1][0],sc.res[-1][1], sc.res[-1][2], sc.res[-1][3], sc.res[-1][4], sc.res[-1][5], sc.res[-1][6], sc.res[-1][7], sc.res[-1][8]]
+        #[len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var]
+        f = open("InstanceRES.csv", 'a', newline='')
+        wr = csv.writer(f)
+        wr.writerow(info)
+        f.close()
 for sc in scenarios:
     count = 1
     for res_info in sc.res:

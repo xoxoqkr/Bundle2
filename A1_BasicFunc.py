@@ -156,7 +156,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
         rider_num += 1
 
 
-def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000):
+def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -174,7 +174,10 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
     interval_index = len(datas[0]) - 1
     for data in datas:
         name = data[0]
-        speed = data[2]
+        if input_speed == None:
+            speed = data[2]
+        else:
+            speed = input_speed
         capacity = data[4]
         freedom = data[5]
         order_select_type = data[6]

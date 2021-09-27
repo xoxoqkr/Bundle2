@@ -511,7 +511,8 @@ def Two_sidedScore(bundle, riders, orders, stores, platform, t, t_now, min_pr , 
     p_s_t = WeightCalculator(riders, active_rider_names, sample_size=sample_size)
     w_list = []
     for p in p_s_t:
-        w_list.append(p[1])
+        #w_list.append(p[1])
+        w_list.append(p_s_t[p])
     #print('T: {} 길이 {} 평균 {} 분산 {}'.format(t_now, len(p_s_t), np.average(w_list), np.var(w_list)))
     #input('w 확인')
     mock_platform = copy.deepcopy(platform)
