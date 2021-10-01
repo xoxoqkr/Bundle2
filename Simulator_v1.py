@@ -4,6 +4,7 @@ import time
 import simpy
 import random
 import copy
+#from Cython.Includes.libcpp.vector import capacity
 from astropy import uncertainty
 from sympy import variations
 
@@ -30,8 +31,8 @@ rider_working_time = 120
 store_num = 20
 rider_num = 5
 rider_gen_interval = 2  # 라이더 생성 간격.
-rider_speed = 3
-rider_capacity = 1
+rider_speed = 2
+rider_capacity = 2
 start_ite = 0
 ITE_NUM = 1
 option_para = True  # True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
@@ -52,13 +53,14 @@ f.close()
 
 
 infos = [['C',True, False, 'myopic', True]]
-v1 = ['new', 'all']
+#v1 = ['new', 'all']
 #v1 = ['all']
-#v1 = ['new']
-v2 = [True, False]
+v1 = ['new']
+#v2 = [True, False]
+v2 = [False]
 v3 = ['myopic', 'two_sided']
-v4 = ['setcover','greedy']
-
+#v4 = ['setcover','greedy']
+v4 = ['greedy']
 
 
 info = ['C', False, False, 'myopic', True]
@@ -72,7 +74,7 @@ for i in v1:
 
 
 #input('확인 {}'.format(len(scenarios)))
-for ite in range(2, 5):
+for ite in range(0, 1):
     # instance generate
     for sc in scenarios:
         print('시나리오 정보 {} : {} : {} : {}'.format(sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type,
@@ -80,12 +82,6 @@ for ite in range(2, 5):
         sc.store_dir = 'Instance/Instancestore_infos'+str(ite)
         sc.customer_dir = 'Instance/Instancecustomer_infos'+str(ite)
         sc.rider_dir = 'Instance/Instancerider_infos'+str(ite)
-        if sc.name == 'A':
-            score_type = 'oracle'
-            rider_capacity = 3
-        else:
-            score_type = 'simple'
-            rider_capacity = 1
         Rider_dict = {}
         Orders = {}
         Platform2 = Platform_pool()
@@ -93,7 +89,7 @@ for ite in range(2, 5):
         # run
         env = simpy.Environment()
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
-        env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed))
+        env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity))
         env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict))
         if run_para == True and sc.platform_work == True:
             """

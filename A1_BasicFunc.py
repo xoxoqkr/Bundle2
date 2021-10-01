@@ -156,7 +156,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
         rider_num += 1
 
 
-def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None):
+def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None, input_capacity = None):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -178,7 +178,10 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
             speed = data[2]
         else:
             speed = input_speed
-        capacity = data[4]
+        if input_capacity == None:
+            capacity = data[4]
+        else:
+            capacity = input_capacity
         freedom = data[5]
         order_select_type = data[6]
         wait_para = data[7]
@@ -373,14 +376,21 @@ def UpdatePlatformByOrderSelection(platform, order_index):
         del platform.platform[order_index]
 
 
-def ActiveRiderCalculator(rider, t_now = 0):
+def ActiveRiderCalculator(rider, t_now = 0, option = None, interval = 5):
     """
     현재 라이더가 새로운 주문을 선택할 수 있는지 유/무를 계산.
     @param rider: class rider
     @return: True/ False
     """
-    if len(rider.picked_orders) <= rider.max_order_num and t_now <= rider.end_t :
-        return True
+    if t_now <= rider.end_t :
+        if option == None:
+            if len(rider.picked_orders) < rider.max_order_num:
+                print('문구1/ 라이더 {} / 현재 OnHandOrder# {} / 최대 주문 수{} / 예상 선택 시간 {} / 다음 interval 시간 {}'.format(rider.name,len(rider.picked_orders), rider.max_order_num, round(rider.next_search_time,2), t_now + interval))
+                return True
+        else:
+            if len(rider.picked_orders) <= rider.max_order_num and t_now <= rider.next_search_time <= t_now + interval:
+                print('문구2/ 라이더 {} / 현재 OnHandOrder# {} / 최대 주문 수{} / 예상 선택 시간 {} / 다음 interval 시간 {}'.format(rider.name,len(rider.picked_orders), rider.max_order_num, round(rider.next_search_time,2), t_now + interval))
+                return True
     else:
         return False
 

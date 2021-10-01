@@ -4,10 +4,13 @@
 import time
 from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,\
     RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4
-from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore
+from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore, CountActiveRider, WeightCalculator, WeightCalculator2
 import copy
 import operator
 from Bundle_selection_problem import Bundle_selection_problem, Bundle_selection_problem2
+import math
+import numpy as np
+
 
 def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, speed = 1, end_t = 1000, unserved_order_break = True,option = False, divide_option = False, uncertainty = False, platform_exp_error = 1, bundle_select_type = 'normal'):
     B2 = []
@@ -324,8 +327,19 @@ def NewCustomer(cusotmers, now_t, interval = 5):
 
 def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False, speed = 1, end_t = 1000, min_pr = 0.05, divide_option = False,\
                       unserved_bundle_order_break = True,  scoring_type = 'myopic',bundle_selection_type = 'greedy', considered_customer_type = 'new'):
+    yield env.timeout(10)
     while env.now <= end_t:
         now_t = env.now
+        print('T {} 과정 시작'.format(int(now_t)))
+        past_select_t  = []
+        for rider_name in riders:
+            rider = riders[rider_name]
+            if now_t - interval <= rider.last_pick_time < now_t:
+                past_select_t.append([rider_name, rider.last_pick_time])
+        past_select_t.sort( key = operator.itemgetter(1))
+        #sorted_dict = sorted(weight2.items(), key = lambda item: item[1])
+        #print('과거 예상 라이더 선택 순서{}'.format(sorted_dict))
+        input('C!@ T {} // 과거 라이더 선택 순서 {}'.format(now_t - interval, past_select_t))
         lamda1, lamda2, mu1, mu2 = LamdaMuCalculate(orders, riders, now_t, interval=interval, return_type='class')
         p = CalculateRho(lamda1, lamda2, mu1, mu2)
         if p >= thres_p:
@@ -335,6 +349,17 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
             else:
                 considered_customers_names, interval_orders = CountUnpickedOrders(orders, now_t, interval = interval,  return_type='name')
             print('탐색 대상 고객들 {}'.format(considered_customers_names))
+            active_rider_names = CountActiveRider(riders, interval, min_pr=min_pr, t_now=now_t, option = 'w')
+            input('돌아오는 시기에 주문 선택 예쌍 라이더 {}'.format(active_rider_names))
+            #weight2 = WeightCalculator(riders, active_rider_names)
+            weight2 = WeightCalculator2(riders, active_rider_names, now_t, interval= interval)
+            w_list = list(weight2.values())
+            sorted_dict = sorted(weight2.items(), key=lambda item: item[1])
+            print('C!@ T {} // 과거 예상 라이더 선택 순서{}'.format(now_t, sorted_dict))
+            try:
+                input('T {} / 대상 라이더 수 {}/시나리오 수 {} 중 {} / w평균 {} /w표준편차 {}'.format(now_t, len(active_rider_names),math.factorial(len(active_rider_names)),len(weight2), np.average(w_list),np.std(w_list)))
+            except:
+                input('T {} 출력 에러'.format(now_t))
             for customer_name in considered_customers_names:
                 start = time.time()
                 target_order = orders[customer_name]
@@ -343,7 +368,7 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
                                                                  d_thres_option=True, speed=speed)
                 selected_bundle = SelectByTwo_sided_way2(target_order, riders, considered_customers, stores, platform_set, p2, interval, env.now, min_pr, speed=speed, \
                                                          scoring_type = scoring_type,bundle_permutation_option= bundle_permutation_option,\
-                                                         unserved_bundle_order_break=unserved_bundle_order_break)
+                                                         unserved_bundle_order_break=unserved_bundle_order_break, input_weight= weight2)
                 end = time.time()
                 print('고객 당 계산 시간 {} : 선택 번들1 {}'.format(end - start, selected_bundle))
                 # selected_bundle 구조 : [(1151, 1103, 103, 151), 16.36, 10.69, 5.03, [103, 151], 16.36, 23.1417(s), 23.1417(s), 1000000(e), 1000000(d), 0]
@@ -354,13 +379,15 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
                 pass
                 #기존 번들을 추가하는 부분.
             else:
+                #active_rider_names = CountActiveRider(riders, interval, min_pr=min_pr, t_now=now_t)
+                #weight2 = WeightCalculator(riders, active_rider_names)
                 for order_index in platform_set.platform:
                     order = platform_set.platform[order_index]
                     if order.type == 'bundle':
                         print('확인 {}'.format(order.old_info))
                         order.old_info += [order.old_info[6]]
                         e,d = Two_sidedScore(order.old_info, riders, orders, stores, platform_set , interval, now_t, min_pr, M=1000,
-                                       sample_size=1000, platform_exp_error=1)
+                                       sample_size=1000, platform_exp_error=1, weight = weight2)
                         order.old_info += [e,d,0]
                         B.append(order.old_info)
             unique_bundles = [] #P의 역할

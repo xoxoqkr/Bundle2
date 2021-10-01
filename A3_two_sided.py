@@ -10,9 +10,9 @@ import numpy as np
 import random
 import copy
 import time
+import math
 
-
-def CountActiveRider(riders, t, min_pr = 0, t_now = 0):
+def CountActiveRider(riders, t, min_pr = 0, t_now = 0, option = 'w'):
     """
     현대 시점에서 t 시점내에 주문을 선택할 확률이 min_pr보다 더 높은 라이더를 계산
     @param riders: RIDER CLASS DICT
@@ -23,7 +23,7 @@ def CountActiveRider(riders, t, min_pr = 0, t_now = 0):
     names = []
     for rider_name in riders:
         rider = riders[rider_name]
-        if ActiveRiderCalculator(rider, t_now) == True and rider.select_pr(t) >= min_pr:
+        if ActiveRiderCalculator(rider, t_now, option = option) == True and rider.select_pr(t) >= min_pr:
             names.append(rider_name)
     return names
 
@@ -65,6 +65,57 @@ def WeightCalculator(riders, rider_names, sample_size = 1000):
     for key in count:
         if count[key] > 0:
             w[key] = round(count[key]/sample_size,6)
+    return w
+
+
+def WeightCalculator2(riders, rider_names, t_now, interval = 5, sample_size1 = 100, sample_size2 = 1000):
+    """
+    시뮬레이션을 활용해서, t_i의 발생 확률을 계산함.
+    @param riders: RIDER CLASS DICT
+    @param rider_names: active rider names list
+    @param sample_size: 포아송 분포 샘플 크기
+    @return: w = {KY : ^_t_i ELE : ^_t_i가 발생할 확률}
+    """
+    w = {}
+    ava_combinations = list(itertools.permutations(rider_names, len(rider_names))) # 가능한 조합
+    count = {}
+    for info in ava_combinations:
+        count[info] = 0
+    poisson_dist = {}
+    max_count = sample_size1 * 3
+    for rider_name in rider_names:
+        rider = riders[rider_name]
+        min_t = t_now - rider.last_pick_time
+        max_t = min_t + interval # t_now + interval #
+        n_count = 0
+        sample = []
+        while n_count < max_count or len(sample) < sample_size1:
+            value = np.random.poisson(rider.search_lamda)
+            if min_t <= value < max_t:
+                sample.append(value)
+            n_count += 1
+        poisson_dist[rider_name] = sample
+    for _ in range(sample_size2):
+        tem = []
+        for rider_name in rider_names:
+            rider = riders[rider_name]
+            #rider.last_pick_time
+            val = rider.last_pick_time + random.choice(poisson_dist[rider_name])
+            tem.append([rider_name, val])
+        tem.sort(key = operator.itemgetter(1))
+        seq = []
+        for info in tem:
+            seq.append(info[0])
+        #input('seq 확인 {} test {}'.format(seq, tuple(seq)))
+        count[tuple(seq)] += 1
+    valid_num = sum(count.values())
+    input('유효한 관찰수 {}'.format(valid_num))
+    for key in count:
+        val = round(count[key]/valid_num,6)
+        if val > 0:
+            w[key] = val
+    print_w = sorted(w.items(), key = lambda item: item[1], reverse = True)
+    input('확인 {}'.format(print_w))
     return w
 
 
@@ -335,7 +386,7 @@ def SelectByTwo_sided_way(target_order, riders, orders, stores, platform, p2, t,
         return None
 
 
-def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, thres = 0.1, speed = 1, bundle_permutation_option = False, unserved_bundle_order_break = True, s = 3, scoring_type = 'myopic',input_data = None):
+def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t, t_now, min_pr, thres = 0.1, speed = 1, bundle_permutation_option = False, unserved_bundle_order_break = True, s = 3, scoring_type = 'myopic',input_data = None, input_weight = None):
     """
     주어진 feasible bundle(혹은 target order를 기준으로 탐색된 feasible bundle)에
     대해서 s,e,d 점수가 높은 번들을 선택 후 제안.
@@ -390,6 +441,16 @@ def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t
     count = 0
     scores = []
     print('대상 번들들 {}'.format(feasible_bundles))
+    if input_weight == None:
+        active_rider_names = CountActiveRider(riders, t, min_pr=min_pr, t_now=t_now)
+        weight = WeightCalculator(riders, active_rider_names)
+        w_list = list(weight.values())
+        try:
+            input('T {} / 대상 라이더 수 {}/시나리오 수 {} 중 {} / w평균 {} /w표준편차 {}'.format(t_now,len(active_rider_names),math.factorial(len(active_rider_names)),len(weight), np.average(w_list), np.std(w_list)))
+        except:
+            input('T {} 출력 에러'.format(t_now))
+    else:
+        weight = input_weight
     for feasible_bundle in feasible_bundles:
         s = feasible_bundle[6]
         e_pool = []
@@ -401,7 +462,7 @@ def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t
             #print('Two_sidedScore 시작')
             #start = time.time()
             try:
-                e,d = Two_sidedScore(feasible_bundle, riders, orders, stores, platform, t, t_now, min_pr, M=1000, sample_size=1000)
+                e,d = Two_sidedScore(feasible_bundle, riders, orders, stores, platform, t, t_now, min_pr, M=1000, sample_size=1000, weight = weight)
                 #end = time.time()
                 #print('계산 시간 {}'.format(end - start))
                 e_pool.append(e)
@@ -506,13 +567,17 @@ def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, 
     else:
         return []
 
-def Two_sidedScore(bundle, riders, orders, stores, platform, t, t_now, min_pr , M = 1000, sample_size=1000, platform_exp_error = 1):
-    active_rider_names = CountActiveRider(riders, t, min_pr=min_pr, t_now = t_now)
-    p_s_t = WeightCalculator(riders, active_rider_names, sample_size=sample_size)
+def Two_sidedScore(bundle, riders, orders, stores, platform, t, t_now, min_pr , M = 1000, sample_size=1000, platform_exp_error = 1, weight = None):
+    if weight == None:
+        active_rider_names = CountActiveRider(riders, t, min_pr=min_pr, t_now = t_now)
+        p_s_t = WeightCalculator(riders, active_rider_names, sample_size=sample_size)
+    else:
+        p_s_t = weight
     w_list = []
     for p in p_s_t:
         #w_list.append(p[1])
         w_list.append(p_s_t[p])
+    print('시나리오 수 {} / w평균 {} /w표준편차 {}'.format(len(p_s_t), np.average(w_list), np.std(w_list)))
     #print('T: {} 길이 {} 평균 {} 분산 {}'.format(t_now, len(p_s_t), np.average(w_list), np.var(w_list)))
     #input('w 확인')
     mock_platform = copy.deepcopy(platform)
@@ -538,3 +603,9 @@ def Two_sidedScore(bundle, riders, orders, stores, platform, t, t_now, min_pr , 
     mock_platform.platform[mock_index] = o #가상의 번들을 추가.
     e,d = BundleScoreSimulator(riders, mock_platform, orders, stores, p_s_t, t, t_now)
     return e,d
+
+"""
+def SnapshotCheck(w):
+    #w의 평균/ 표준 편차/ 0이 아닌 것의 계수 확인/ w에 고려된 라이더의 수
+"""
+
