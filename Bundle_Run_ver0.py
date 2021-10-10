@@ -433,12 +433,11 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
-def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', sort_standard = 7, uncertainty = False, current_loc = None, add ='X'):
+def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', sort_standard = 7, uncertainty = False, current_loc = None, dist_thres = 15):
     """
-    라이더에게 가장 적합한 번들을 탐색 후 제안
-    라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
-    1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
-    2)주문들 중 최단 경로가 가장 짧은 주문 선택
+    라이더에게 가장 적합한 번들을 탐색 후 제안.
+    1)라이더에게 현재 선택할 만한 Task을 제시 (Task는 single/bubdle 모두 가능)
+    2)다른 라이더들에게 미치는 영향을 고려할 수는 없는가?
     *Note : 선택하는 주문에 추가적인 조건이 걸리는 경우 ShortestRoute 추가적인 조건을 삽입할 수 있음.
     @param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
     @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
@@ -448,9 +447,15 @@ def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', sort_st
     """
     score = []
     bound_order_names = []
+    #1 단건 주문으로 구성된 주문들을 파악
+    wait_order_names = []
     for index in platform.platform:
-        # 현재의 경로를 반영한 비용
-        order = platform.platform[index]
+        task = platform.platform[index]
+        if len(task.customers) == 1:
+            wait_order_names += task.customers
+    #2 번들 구성 하기
+
+
         exp_onhand_order = order.customers + rider.onhand
         #print('주문 고객 확인 {}/ 자신의 경로 길이 {} / 상태 {}/ ID {}'.format(order.customers, len(rider.route), order.picked, id(order)))
         if order.picked == False:
