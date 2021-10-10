@@ -455,6 +455,9 @@ def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', uncerta
             wait_order_names += task.customers
     #2 번들 구성 하기
 
+
+
+
     #3 구성된 번들을 제안
     rider_select = rider.OrderSelect(platform, customers, p2=p2, score_type=score_type, uncertainty=uncertainty)
     return rider_select
