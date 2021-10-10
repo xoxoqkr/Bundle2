@@ -706,12 +706,14 @@ class Customer(object):
         self.platform_exp_cook_time = None
         self.food_wait = None
         self.service_time = service_time
+        self.priority_weight = 1
         #self.sensitiveness = random.randrange()
 
 class Platform_pool(object):
     def __init__(self):
         self.platform = {}
         self.info = []
+        self.p = 1
 
 
 class scenario(object):
