@@ -433,7 +433,7 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
-def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', sort_standard = 7, uncertainty = False, current_loc = None, dist_thres = 15):
+def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', uncertainty = False, current_loc = None, dist_thres = 15):
     """
     라이더에게 가장 적합한 번들을 탐색 후 제안.
     1)라이더에게 현재 선택할 만한 Task을 제시 (Task는 single/bubdle 모두 가능)
@@ -455,7 +455,9 @@ def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', sort_st
             wait_order_names += task.customers
     #2 번들 구성 하기
 
-
+    #3 구성된 번들을 제안
+    rider_select = rider.OrderSelect(platform, customers, p2=p2, score_type=score_type, uncertainty=uncertainty)
+    return rider_select
         exp_onhand_order = order.customers + rider.onhand
         #print('주문 고객 확인 {}/ 자신의 경로 길이 {} / 상태 {}/ ID {}'.format(order.customers, len(rider.route), order.picked, id(order)))
         if order.picked == False:
