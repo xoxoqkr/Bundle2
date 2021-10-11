@@ -2,9 +2,10 @@
 
 #from scipy.stats import poisson
 import time
+from A1_BasicFunc import distance
 from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,\
     RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4
-from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore, CountActiveRider, WeightCalculator, WeightCalculator2
+from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore, CountActiveRider, WeightCalculator, WeightCalculator2, ConstructFeasibleBundle_TwoSided, Calculate_e_b2, Calculate_d_b
 import copy
 import operator
 from Bundle_selection_problem import Bundle_selection_problem, Bundle_selection_problem2
@@ -433,7 +434,11 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
 
-def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', uncertainty = False, current_loc = None, dist_thres = 15):
+
+
+
+
+def TaskCalculate(rider, platform, customers, now_t, p2 = 0, score_type ='simple', uncertainty = False, current_loc = None, thres1 = 7, s=3):
     """
     라이더에게 가장 적합한 번들을 탐색 후 제안.
     1)라이더에게 현재 선택할 만한 Task을 제시 (Task는 single/bubdle 모두 가능)
@@ -454,9 +459,39 @@ def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', uncerta
         if len(task.customers) == 1:
             wait_order_names += task.customers
     #2 번들 구성 하기
+    #2-1 일정 거리 이내의 고객 선별 후
+    target_customers = []
+    for customer_name in customers:
+        customer = customers[customer_name]
+        dist = distance(rider.last_departure_loc, customer.store_loc)/rider.speed
+        if dist <= thres1:
+            target_customers.append(customer.name)
+    # 2-2 해당 고객을 target으로 번들 구성
+    Bundles = []
+    for customer_name in target_customers:
+        target_order = customers[customer_name]
+        B2 = ConstructFeasibleBundle_TwoSided(target_order, customers, s-1, p2, speed = rider.speed)
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, customers, s, p2, speed = rider.speed)
+        FeasibleBundles = B2 + B3
+        bundle_scores = []
+        count = 0
+        for bundle_info in FeasibleBundles:
+            s_score = bundle_info[6] #O-D단축 거리.
+            #2-2-1 : e 는 lt가 일정 이상 벗어난 고객 시간
+            e_info = []
+            for customer_name in bundle_info[4]:
+                e_info.append(1000 - (now_t - customers[customer_name].time_info[0])) #지나간 시간 더하기.
+            e_score = sum(e_info)
+            bundle_scores += [[count, s_score, e_score, 0]]
+            count += 1
+        bundle_scores = ParetoDominanceCount(bundle_scores, 0, 1, 2, 3)
+        select_info = FeasibleBundles[bundle_scores[0][0]] + bundle_scores[0]
+        Bundles.append(select_info)
+    #3 FesibleBundle 중 재일 좋은 것을 추천
 
-
-
+"""
+for customer_name in target_customers:
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed,bundle_permutation_option=bundle_permutation_option)
 
     #3 구성된 번들을 제안
     rider_select = rider.OrderSelect(platform, customers, p2=p2, score_type=score_type, uncertainty=uncertainty)
@@ -522,6 +557,8 @@ def TaskSelect(rider, platform, customers, p2 = 0, score_type ='simple', uncerta
     else:
         print('가능한 주문 X/ 대상 주문{}'.format(len(bound_order_names)))
         return None
+"""
+
 
 
 
