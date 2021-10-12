@@ -8,7 +8,8 @@ import random
 import A1_BasicFunc as Basic
 import time
 import numpy
-
+from Bundle_Run_ver0 import TaskCalculate
+import copy
 
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
 # 4:고객이 받은 시간, 5: 보장 배송 시간, 6:가게에서 준비시간,7: 고객에게 서비스 하는 시간]
@@ -66,6 +67,7 @@ class Rider(object):
         self.next_select_t = int(env.now)
         self.next_search_time = 0 #다음에 주문을 선택할 시점
         self.last_pick_time = 0 #저번에 주문을 선택한 시점
+        self.platform_recommend = True
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
         env.process(self.TaskSearch(env, platform, customers, p2=self.p2, order_select_type=order_select_type, uncertainty=uncertainty))
 
@@ -287,7 +289,7 @@ class Rider(object):
             Basic.UpdatePlatformByOrderSelection(platform, order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
 
 
-    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None, add = 'X' ):
+    def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None, add = 'X'):
         """
         라이더의 입장에서 platform의 주문들 중에서 가장 이윤이 높은 주문을 반환함.
         1)현재 수행 중인 경로에 플랫폼의 주문을 포함하는 최단 경로 계산
@@ -299,6 +301,11 @@ class Rider(object):
         @param sort_standard: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
         @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
         """
+        if self.platform_recommend == True:
+            old_len = copy.deepcopy(len(platform.platform))
+            print('현재 플랫폼 길이 {} '.format(len(platform.platform)))
+            TaskCalculate(self, platform, customers, self.env.now, p2=0, thres1=7, bundle_size=3)
+            input('플랫폼 길이 차이 {} '.format(len(platform.platform) - old_len))
         score = []
         bound_order_names = []
         for index in platform.platform:

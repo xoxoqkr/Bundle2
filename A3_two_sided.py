@@ -203,7 +203,7 @@ def MIN_OD_pair(orders, q,s,):
     return min(OD_pair_dist)
 
 
-def ParetoDominanceCount(datas, index, score_index1, score_index2, result_index, strict_option = False):
+def ParetoDominanceCount(datas, index, score_index1, score_index2, result_index, index_list = False, strict_option = False):
     """
     주어진 데이터에 대해 ParetoDominanceCount를 수행.
     @param datas: 대상이 되는 리스트
@@ -220,7 +220,14 @@ def ParetoDominanceCount(datas, index, score_index1, score_index2, result_index,
         for data in datas:
             #print(base_data, data)
             #input('확인')
-            if base_data[index] != data[index]:
+            unique_index = False
+            if index_list == False:
+                if base_data[index] != data[index]:
+                    unique_index = True
+            else:
+                if sorted(base_data[index]) != sorted(data[index]):
+                    unique_index = True
+            if unique_index == True:
                 if strict_option == True:
                     if base_data[score_index1] < data[score_index1] and base_data[score_index2] < data[score_index2]:
                         dominance_count += 1

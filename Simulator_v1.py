@@ -97,11 +97,12 @@ for ite in range(0, 1):
                                          end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
 
             """
+            """
             env.process(Platform_process4(env, Platform2, Orders, Rider_dict, Store_dict, p2, thres_p, interval,bundle_permutation_option=False,
                                           speed=rider_speed, end_t=run_time, min_pr=0.05, divide_option=False,
                                           considered_customer_type=sc.considered_customer_type,unserved_bundle_order_break=sc.unserved_order_break,
                                           scoring_type=sc.scoring_type, bundle_selection_type= sc.bundle_selection_type))
-
+            """
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed, riders = Rider_dict)
         sc.res.append(res)

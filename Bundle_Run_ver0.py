@@ -2,9 +2,9 @@
 
 #from scipy.stats import poisson
 import time
-from A1_BasicFunc import distance
+#from A1_BasicFunc import distance
 from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,\
-    RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4
+    RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4,GenBundleOrder
 from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore, CountActiveRider, WeightCalculator, WeightCalculator2, ConstructFeasibleBundle_TwoSided, Calculate_e_b2, Calculate_d_b
 import copy
 import operator
@@ -438,20 +438,21 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
 
 
 
-def TaskCalculate(rider, platform, customers, now_t, p2 = 0, score_type ='simple', uncertainty = False, current_loc = None, thres1 = 7, s=3):
+def TaskCalculate(rider, platform, customers, now_t, p2 = 0, thres1 = 7, bundle_size=3):
     """
     라이더에게 가장 적합한 번들을 탐색 후 제안.
     1)라이더에게 현재 선택할 만한 Task을 제시 (Task는 single/bubdle 모두 가능)
     2)다른 라이더들에게 미치는 영향을 고려할 수는 없는가?
     *Note : 선택하는 주문에 추가적인 조건이 걸리는 경우 ShortestRoute 추가적인 조건을 삽입할 수 있음.
+    @param rider: 라이더 class
     @param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
     @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+    @param now_t: 현재 시간
     @param p2: 허용 Food Lead Time의 최대 값
-    @param sort_standard: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
-    @return: [order index, route(선택한 고객 반영), route 길이]선택한 주문 정보 / None : 선택할 주문이 없는 경우
+    @param thres1: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
+    @param bundle_size: 구성할 최대 번들 크기 2 or 4
+    @return: None -> 플랫폼 task에 라이더에게 추천하는 번들 추가
     """
-    score = []
-    bound_order_names = []
     #1 단건 주문으로 구성된 주문들을 파악
     wait_order_names = []
     for index in platform.platform:
@@ -463,19 +464,21 @@ def TaskCalculate(rider, platform, customers, now_t, p2 = 0, score_type ='simple
     target_customers = []
     for customer_name in customers:
         customer = customers[customer_name]
-        dist = distance(rider.last_departure_loc, customer.store_loc)/rider.speed
+        dist =  math.sqrt((rider.last_departure_loc[0] - customer.store_loc[0]) ** 2 + (rider.last_departure_loc[1] - customer.store_loc[1]) ** 2)/rider.speed
+        #dist = distance(rider.last_departure_loc, customer.store_loc)/rider.speed
         if dist <= thres1:
             target_customers.append(customer.name)
     # 2-2 해당 고객을 target으로 번들 구성
     Bundles = []
     for customer_name in target_customers:
         target_order = customers[customer_name]
-        B2 = ConstructFeasibleBundle_TwoSided(target_order, customers, s-1, p2, speed = rider.speed)
-        B3 = ConstructFeasibleBundle_TwoSided(target_order, customers, s, p2, speed = rider.speed)
+        B2 = ConstructFeasibleBundle_TwoSided(target_order, customers, bundle_size-1, p2, speed = rider.speed)
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, customers, bundle_size, p2, speed = rider.speed)
         FeasibleBundles = B2 + B3
         bundle_scores = []
         count = 0
         for bundle_info in FeasibleBundles:
+            #bundle_info = feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names, round(route_time,2), s_b, count, s_b, e_b, pareto])
             s_score = bundle_info[6] #O-D단축 거리.
             #2-2-1 : e 는 lt가 일정 이상 벗어난 고객 시간
             e_info = []
@@ -487,79 +490,14 @@ def TaskCalculate(rider, platform, customers, now_t, p2 = 0, score_type ='simple
         bundle_scores = ParetoDominanceCount(bundle_scores, 0, 1, 2, 3)
         select_info = FeasibleBundles[bundle_scores[0][0]] + bundle_scores[0]
         Bundles.append(select_info)
-    #3 FesibleBundle 중 재일 좋은 것을 추천
-
-"""
-for customer_name in target_customers:
-        B3 = ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, speed=speed,bundle_permutation_option=bundle_permutation_option)
-
-    #3 구성된 번들을 제안
-    rider_select = rider.OrderSelect(platform, customers, p2=p2, score_type=score_type, uncertainty=uncertainty)
-    return rider_select
-        exp_onhand_order = order.customers + rider.onhand
-        #print('주문 고객 확인 {}/ 자신의 경로 길이 {} / 상태 {}/ ID {}'.format(order.customers, len(rider.route), order.picked, id(order)))
-        if order.picked == False:
-            #if ((len(exp_onhand_order) <= rider.capacity and len(rider.picked_orders) <= rider.max_order_num)) or (len(order.route) > 2 and len(rider.onhand) < 3):
-            if Basic.ActiveRiderCalculator(rider) == True:
-            #if len(rider.picked_orders) <= rider.max_order_num:
-                if type(order.route[0]) != list:
-                    input('에러 확인 {} : {}'.format(rider.last_departure_loc,order.route))
-                if current_loc != None:
-                    dist = Basic.distance(current_loc, order.route[0][2]) / rider.speed
-                else:
-                    dist = Basic.distance(rider.last_departure_loc, order.route[0][2])/rider.speed #자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
-                info = [order.index,dist]
-                bound_order_names.append(info)
-            #elif len(order.route) > 2: #번들이라는 소리
-            #    dist = Basic.distance(rider.last_departure_loc, order.route[0][2]) / rider.speed
-            #    info = [order.index, dist]
-            #    bound_order_names.append(info)
-        bound_order_names.sort(key = operator.itemgetter(1))
-    if len(bound_order_names) > 0:
-        for info in bound_order_names[:rider.bound]: #todo : route의 시작 위치와 자신의 위치사이의 거리가 가까운 bound개의 주문 중 선택.
-            order = platform.platform[info[0]]
-            if score_type == 'oracle':
-                route_info = rider.ShortestRoute(order, customers, p2=p2, uncertainty = uncertainty)
-                #route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
-                print('선택 주문 정보 {}'.format(route_info))
-                if len(route_info) > 0:
-                    benefit = order.fee / route_info[5]  # 이익 / 운행 시간
-                    score.append([order.index] + route_info + [benefit])
-            elif score_type == 'simple':
-                mv_time = 0
-                times = []
-                rev_route = [rider.last_departure_loc]
-                for route_info in order.route:
-                    rev_route.append(route_info[2])
-                for node_index in range(1,len(rev_route)):
-                    mv_time += Basic.distance(rev_route[node_index - 1],rev_route[node_index])/rider.speed
-                for customer_name in order.customers:
-                    mv_time += customers[customer_name].time_info[6] #예상 가게 준비시간
-                    mv_time += customers[customer_name].time_info[7] #예상 고객 준비시간
-                    times.append(rider.env.now - customers[customer_name].time_info[0])
-                    #rider.income += customers[customer_name].fee
-                WagePerMin = round(order.fee/mv_time,2) #분당 이익
-                if len(order.route) > 2:
-                    #WagePerMin = 1000 + (100 - Basic.distance(rev_route[0],rev_route[1])) #현재 위치에서 가까운
-                    #WagePerMin = 1000 + max(0,(100 - sum(times)/len(times))) #최신의 고객들 부터 선택하도록
-                    pass
-                #input('추가 경로 {}'.format(order.route))
-                if type(order.route) == tuple:
-                    order.route = list(order.route)
-                score.append([order.index] + [order.route ,None,None,None,order.customers,None] + [WagePerMin])
-    if len(score) > 0:
-        score.sort(key=operator.itemgetter(sort_standard), reverse = True)
-        for info in score:
-            #print('오더 index {} picked 유/무 {}'.format(info[0], platform.platform[info[0]].picked))
-            pass
-        #input('score 체크{}'.format(score))
-        return score[0]
-    else:
-        print('가능한 주문 X/ 대상 주문{}'.format(len(bound_order_names)))
-        return None
-"""
-
-
+    #3 FesibleBundle 중 재일 좋은 것을 플랫폼에 추천
+    for bundle in Bundles: #pareto 점수 초기화
+        bundle[10] = 0
+    selected_bundles = ParetoDominanceCount(Bundles, 7, 8, 9, 10)
+    selected_bundle = selected_bundles[0]
+    task_index = max(platform.platform) + 1
+    platform_recommend_bundle_task = GenBundleOrder(task_index, selected_bundle, customers, now_t, M=1000, platform_exp_error=1)
+    platform.platform[task_index] = platform_recommend_bundle_task
 
 
 def Platform_process5(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False, speed = 1, end_t = 1000, min_pr = 0.05, divide_option = False,\
