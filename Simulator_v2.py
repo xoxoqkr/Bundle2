@@ -60,7 +60,7 @@ v2 = [False]
 v3 = ['myopic', 'two_sided']
 #v4 = ['setcover','greedy']
 v4 = ['greedy']
-platform_recommend = False  #True ; False
+platform_recommend = True  #True ; False
 order_select_type = 'simple' #oracle ; simple
 info = ['C', False, False, 'myopic', True]
 
@@ -73,7 +73,7 @@ for i in v1:
 scenarios = scenarios[:1]
 
 #input('확인 {}'.format(len(scenarios)))
-for ite in range(1, 2):
+for ite in range(0, 5):
     # instance generate
     for sc in scenarios:
         print('시나리오 정보 {} : {} : {} : {}'.format(sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type,
@@ -90,18 +90,6 @@ for ite in range(1, 2):
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
         env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity, platform_recommend = platform_recommend, input_order_select_type = order_select_type))
         env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict))
-        if run_para == True and sc.platform_work == True:
-            """
-            env.process(Platform_process(env, Platform2, Orders, Rider_dict, p2, thres_p, interval, speed=rider_speed,
-                                         end_t=1000, unserved_order_break=sc.unserved_order_break, option = option_para, divide_option = divide_option, uncertainty = uncertainty_para, platform_exp_error = platform_exp_error))
-
-            """
-            """
-            env.process(Platform_process4(env, Platform2, Orders, Rider_dict, Store_dict, p2, thres_p, interval,bundle_permutation_option=False,
-                                          speed=rider_speed, end_t=run_time, min_pr=0.05, divide_option=False,
-                                          considered_customer_type=sc.considered_customer_type,unserved_bundle_order_break=sc.unserved_order_break,
-                                          scoring_type=sc.scoring_type, bundle_selection_type= sc.bundle_selection_type))
-            """
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed, riders = Rider_dict)
         sc.res.append(res)

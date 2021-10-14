@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
+#import A3_two_sided
 import math
 import random
 import csv
 import numpy.random
-import A1_Class as Class
 import time
-
+import A1_Class
+#from A2_Func import *
+#from A2_Func import GenBundleOrder
+#from A3_two_sided import ParetoDominanceCount, ConstructFeasibleBundle_TwoSided
 
 def distance(p1, p2):
     """
@@ -142,7 +145,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
+        single_rider = A1_Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
         single_rider.exp_wage = exp_WagePerHr
         Rider_dict[rider_num] = single_rider
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
@@ -156,7 +159,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
         rider_num += 1
 
 
-def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None, input_capacity = None):
+def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None, input_capacity = None, platform_recommend = False, input_order_select_type = None):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -183,12 +186,17 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
         else:
             capacity = input_capacity
         freedom = data[5]
-        order_select_type = data[6]
+        if input_order_select_type == None:
+            order_select_type = data[6]
+        else:
+            order_select_type = input_order_select_type
+        #order_select_type = data[6]
         wait_para = data[7]
         uncertainty = data[8]
         exp_error = data[9]
-        single_rider = Class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
-                                   capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
+        single_rider = A1_Class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
+                                   capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
+                                      uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend)
         single_rider.exp_wage = exp_WagePerHr
         Rider_dict[name] = single_rider
         interval = data[interval_index]
@@ -208,7 +216,7 @@ def GenerateStoreByCSV(env, csv_dir, platform,Store_dict):
         order_ready_time = data[3]
         capacity = data[4]
         slack = data[5]
-        store = Class.Store(env, platform, name, loc=loc, order_ready_time=order_ready_time, capacity=capacity, print_para=False, slack = slack)
+        store = A1_Class.Store(env, platform, name, loc=loc, order_ready_time=order_ready_time, capacity=capacity, print_para=False, slack = slack)
         Store_dict[name] = store
 
 
@@ -240,7 +248,7 @@ def Ordergenerator(env, orders, stores, max_range = 50, interval = 5, runtime = 
             cook_time = round(random.choice(pool),4)
         if cook_time < 0:
             input('조리 시간 음수 {}/ 생성 정보 {}'.format(cook_time,cooking_time))
-        order = Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2, cooking_time = cook_time, cook_info = [cook_time_type, cooking_time])
+        order = A1_Class.Customer(env, name, input_location, store=store_num, store_loc=stores[store_num].location, p2=p2, cooking_time = cook_time, cook_info = [cook_time_type, cooking_time])
         #input('주문 {} 정보 {}'.format(order.name, order.cook_info))
         if p2_set == True:
             if type(p2) == list:
@@ -312,7 +320,7 @@ def OrdergeneratorByCSV(env, csv_dir, orders, stores):
         cook_time = data[8]
         cook_time_type = data[9]
         cooking_time = [data[10], data[11]]
-        order = Class.Customer(env, name, input_location, store=store_num, store_loc=store_loc, p2=p2,
+        order = A1_Class.Customer(env, name, input_location, store=store_num, store_loc=store_loc, p2=p2,
                                cooking_time=cook_time, cook_info=[cook_time_type, cooking_time])
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
@@ -376,7 +384,7 @@ def UpdatePlatformByOrderSelection(platform, order_index):
         del platform.platform[order_index]
 
 
-def ActiveRiderCalculator(rider, t_now = 0, option = None, interval = 5):
+def ActiveRiderCalculator(rider, t_now = 0, option = None, interval = 5, print_option = False):
     """
     현재 라이더가 새로운 주문을 선택할 수 있는지 유/무를 계산.
     @param rider: class rider
@@ -385,11 +393,13 @@ def ActiveRiderCalculator(rider, t_now = 0, option = None, interval = 5):
     if t_now <= rider.end_t :
         if option == None:
             if len(rider.picked_orders) < rider.max_order_num:
-                print('문구1/ 라이더 {} / 현재 OnHandOrder# {} / 최대 주문 수{} / 예상 선택 시간 {} / 다음 interval 시간 {}'.format(rider.name,len(rider.picked_orders), rider.max_order_num, round(rider.next_search_time,2), t_now + interval))
+                if print_option == True:
+                    print('문구1/ 라이더 {} / 현재 OnHandOrder# {} / 최대 주문 수{} / 예상 선택 시간 {} / 다음 interval 시간 {}'.format(rider.name,len(rider.picked_orders), rider.max_order_num, round(rider.next_search_time,2), t_now + interval))
                 return True
         else:
             if len(rider.picked_orders) <= rider.max_order_num and t_now <= rider.next_search_time <= t_now + interval:
-                print('문구2/ 라이더 {} / 현재 OnHandOrder# {} / 최대 주문 수{} / 예상 선택 시간 {} / 다음 interval 시간 {}'.format(rider.name,len(rider.picked_orders), rider.max_order_num, round(rider.next_search_time,2), t_now + interval))
+                if print_option == True:
+                    print('문구2/ 라이더 {} / 현재 OnHandOrder# {} / 최대 주문 수{} / 예상 선택 시간 {} / 다음 interval 시간 {}'.format(rider.name,len(rider.picked_orders), rider.max_order_num, round(rider.next_search_time,2), t_now + interval))
                 return True
     else:
         return False

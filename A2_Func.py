@@ -3,8 +3,8 @@
 #from scipy.stats import poisson
 import operator
 import itertools
-from A1_BasicFunc import RouteTime, distance, FLT_Calculate, ActiveRiderCalculator, WillingtoWork
-from A1_Class import Order
+import A1_Class
+from A1_BasicFunc import RouteTime, distance, FLT_Calculate
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -177,7 +177,7 @@ def BreakBundle(break_info, platform_set, customer_set):
     order_num = max(order_nums) + 1
     for customer_name in breaked_customer_names:
         route = [[customer_name, 0, customer_set[customer_name].store_loc, 0],[customer_name, 1, customer_set[customer_name].location, 0 ]]
-        order = Order(order_num,[customer_name], route, 'single', fee = customer_set[customer_name].fee)
+        order = A1_Class.Order(order_num,[customer_name], route, 'single', fee = customer_set[customer_name].fee)
         breaked_customers.append(order)
     res = {}
     for order in single_orders + b2 + b3 + breaked_customers:
@@ -447,7 +447,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
             pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
             customer.platform_exp_cook_time = random.choice(pool)
             route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
-            o = Order(order_index, info[4][0], route, 'single', fee = customer.fee)
+            o = A1_Class.Order(order_index, info[4][0], route, 'single', fee = customer.fee)
         else:
             route = []
             for node in info[0]:
@@ -465,7 +465,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
                 customer_set[customer_name].in_bundle_time = now_t
                 pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
                 customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
-            o = Order(order_index, info[4], route, 'bundle', fee = fee)
+            o = A1_Class.Order(order_index, info[4], route, 'bundle', fee = fee)
             o.olf_info = info
         o.average_ftd = info[2]
         res[order_index] = o
@@ -498,7 +498,7 @@ def PlatformOrderRevise(bundle_infos, customer_set, order_index, platform_set, M
             customer = customer_set[customer_name]
             if customer.time_info[1] == None:
                 singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
-                o = Order(order_index, [customer_name], singleroute, 'single', fee = customer.fee)
+                o = A1_Class.Order(order_index, [customer_name], singleroute, 'single', fee = customer.fee)
                 #res.append(o)
                 res[order_index] = o
                 order_index += 1
@@ -525,7 +525,7 @@ def PlatformOrderRevise2(bundle_infos, customer_set, order_index, platform_set, 
             pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
             customer.platform_exp_cook_time = random.choice(pool)
             route = [[customer.name, 0, customer.store_loc, 0],[customer.name, 1, customer.location, 0]]
-            o = Order(order_index, info[4][0], route, 'single', fee = customer.fee , parameter_info= None)
+            o = A1_Class.Order(order_index, info[4][0], route, 'single', fee = customer.fee , parameter_info= None)
         else:
             route = []
             for node in info[0]:
@@ -543,7 +543,7 @@ def PlatformOrderRevise2(bundle_infos, customer_set, order_index, platform_set, 
                 customer_set[customer_name].in_bundle_time = now_t
                 pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
                 customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
-            o = Order(order_index, info[4], route, 'bundle', fee = fee, parameter_info= info[7:10])
+            o = A1_Class.Order(order_index, info[4], route, 'bundle', fee = fee, parameter_info= info[7:10])
             o.olf_info = info
         o.average_ftd = info[2]
         res[order_index] = o
@@ -577,7 +577,7 @@ def PlatformOrderRevise2(bundle_infos, customer_set, order_index, platform_set, 
                                 pool = np.random.normal(customer.cook_info[1][0],customer.cook_info[1][1] * platform_exp_error, 1000)
                                 customer.platform_exp_cook_time = random.choice(pool)
                                 route = [[customer.name, 0, customer.store_loc, 0], [customer.name, 1, customer.location, 0]]
-                                o = Order(order_index, [customer.name], route, 'single', fee=customer.fee,parameter_info=None)
+                                o = A1_Class.Order(order_index, [customer.name], route, 'single', fee=customer.fee,parameter_info=None)
                                 o.average_ftd = 0
                                 res[order_index] = o
                                 order_index += 1
@@ -602,7 +602,7 @@ def PlatformOrderRevise2(bundle_infos, customer_set, order_index, platform_set, 
             customer = customer_set[customer_name]
             if customer.time_info[1] == None:
                 singleroute = [[customer.name , 0 , customer.store_loc,0],[customer.name, 1, customer.location, 0]]
-                o = Order(order_index, [customer_name], singleroute, 'single', fee = customer.fee)
+                o = A1_Class.Order(order_index, [customer_name], singleroute, 'single', fee = customer.fee)
                 #res.append(o)
                 res[order_index] = o
                 order_index += 1
@@ -613,7 +613,7 @@ def GenSingleOrder(order_index, customer, platform_exp_error = 1):
     pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
     customer.platform_exp_cook_time = random.choice(pool)
     route = [[customer.name, 0, customer.store_loc, 0], [customer.name, 1, customer.location, 0]]
-    o = Order(order_index, customer.name, route, 'single', fee=customer.fee, parameter_info=None)
+    o = A1_Class.Order(order_index, customer.name, route, 'single', fee=customer.fee, parameter_info=None)
     return o
 
 def GenBundleOrder(order_index, bundie_info, customer_set, now_t, M = 1000, platform_exp_error = 1):
@@ -633,7 +633,7 @@ def GenBundleOrder(order_index, bundie_info, customer_set, now_t, M = 1000, plat
         customer_set[customer_name].in_bundle_time = now_t
         pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
         customer_set[customer_name].platform_exp_cook_time = random.choice(pool)
-    o = Order(order_index, bundie_info[4], route, 'bundle', fee=fee, parameter_info=bundie_info[7:10])
+    o = A1_Class.Order(order_index, bundie_info[4], route, 'bundle', fee=fee, parameter_info=bundie_info[7:10])
     o.olf_info = bundie_info
     o.average_ftd = bundie_info[2]
     return o
@@ -917,7 +917,10 @@ def ResultPrint(name, customers, speed = 1, riders = None):
         customer = customers[customer_name]
         if customer.time_info[3] != None:
             lt = customer.time_info[3] - customer.time_info[0]
-            flt = customer.time_info[3] - customer.time_info[2]
+            try:
+                flt = customer.time_info[3] - customer.time_info[2]
+            except:
+                flt  = 10
             mflt = distance(customer.store_loc, customer.location)/speed
             TLT.append(lt)
             FLT.append(flt)

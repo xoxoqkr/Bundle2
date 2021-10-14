@@ -3,14 +3,15 @@
 #from scipy.stats import poisson
 import operator
 import itertools
-from A1_Class import Order
+import A1_Class
 from A1_BasicFunc import RouteTime, distance, FLT_Calculate, ActiveRiderCalculator, WillingtoWork
-from A2_Func import BundleConsist
+from A2_Func import BundleConsist, GenBundleOrder
 import numpy as np
 import random
 import copy
 import time
 import math
+#from A2_Func import GenBundleOrder
 
 def CountActiveRider(riders, t, min_pr = 0, t_now = 0, option = 'w'):
     """
@@ -206,6 +207,8 @@ def MIN_OD_pair(orders, q,s,):
 def ParetoDominanceCount(datas, index, score_index1, score_index2, result_index, index_list = False, strict_option = False):
     """
     주어진 데이터에 대해 ParetoDominanceCount를 수행.
+    자신 보다 큰 값이 있는 경우 += 1
+    즉, 작을 수록 더 좋음.
     @param datas: 대상이 되는 리스트
     @param index: 리스트 내의 이름-id- index
     @param score_index1: 점수 1
@@ -500,7 +503,7 @@ def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t
 
 
 
-def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, bundle_permutation_option = False, uncertainty = False, platform_exp_error = 1):
+def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, bundle_permutation_option = False, uncertainty = False, platform_exp_error = 1, print_option = False):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -543,7 +546,8 @@ def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, 
     for customer_name in orders:
         if customer_name != target_order.name:
             d.append(customer_name)
-    print('대상 고객 {} 고려 고객들 {} '.format(target_order.name, d))
+    if print_option == True:
+        print('대상 고객 {} 고려 고객들 {} '.format(target_order.name, d))
     if len(d) > s - 1:
         M = itertools.permutations(d, s - 1)
         b = []
@@ -605,14 +609,81 @@ def Two_sidedScore(bundle, riders, orders, stores, platform, t, t_now, min_pr , 
         orders[customer_name].in_bundle_time = t_now
         pool = np.random.normal(customer.cook_info[1][0], customer.cook_info[1][1] * platform_exp_error, 1000)
         orders[customer_name].platform_exp_cook_time = random.choice(pool)
-    o = Order(mock_index, bundle[4], route, 'bundle', fee=fee)
+    o = A1_Class.Order(mock_index, bundle[4], route, 'bundle', fee=fee)
     o.average_ftd = bundle[2]
     mock_platform.platform[mock_index] = o #가상의 번들을 추가.
     e,d = BundleScoreSimulator(riders, mock_platform, orders, stores, p_s_t, t, t_now)
     return e,d
 
-"""
-def SnapshotCheck(w):
-    #w의 평균/ 표준 편차/ 0이 아닌 것의 계수 확인/ w에 고려된 라이더의 수
-"""
-
+def TaskCalculateTest(rider, platform, customers, now_t, p2 = 2, thres1 = 5, bundle_size=3, multi_para = True):
+    """
+    라이더에게 가장 적합한 번들을 탐색 후 제안.
+    1)라이더에게 현재 선택할 만한 Task을 제시 (Task는 single/bubdle 모두 가능)
+    2)다른 라이더들에게 미치는 영향을 고려할 수는 없는가?
+    *Note : 선택하는 주문에 추가적인 조건이 걸리는 경우 ShortestRoute 추가적인 조건을 삽입할 수 있음.
+    @param rider: 라이더 class
+    @param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
+    @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
+    @param now_t: 현재 시간
+    @param p2: 허용 Food Lead Time의 최대 값
+    @param thres1: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
+    @param bundle_size: 구성할 최대 번들 크기 2 or 4
+    @return: None -> 플랫폼 task에 라이더에게 추천하는 번들 추가
+    """
+    #1 단건 주문으로 구성된 주문들을 파악
+    wait_order_names = []
+    for index in platform.platform:
+        task = platform.platform[index]
+        if len(task.customers) == 1:
+            wait_order_names += task.customers
+    #2 번들 구성 하기
+    #2-1 일정 거리 이내의 고객 선별 후
+    target_customers = []
+    for customer_name in customers:
+        customer = customers[customer_name]
+        #dist =  math.sqrt((rider.last_departure_loc[0] - customer.store_loc[0]) ** 2 + (rider.last_departure_loc[1] - customer.store_loc[1]) ** 2)/rider.speed
+        if customer.time_info[1] == None:
+            dist = distance(rider.last_departure_loc, customer.store_loc)/rider.speed
+            if dist <= thres1:
+                target_customers.append(customer.name)
+    # 2-2 해당 고객을 target으로 번들 구성
+    Bundles = []
+    print('번들 탐색 대상 고객 수 {}'.format(len(target_customers)))
+    for customer_name in target_customers:
+        target_order = customers[customer_name]
+        considered_customers = BundleConsideredCustomers(target_order, platform, {rider.name:rider}, customers,
+                                                         bundle_search_variant=False,
+                                                         d_thres_option=True, speed=rider.speed)
+        B2 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, bundle_size-1, p2, bundle_permutation_option= True,speed = rider.speed)
+        B3 = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, bundle_size, p2, bundle_permutation_option= True, speed = rider.speed)
+        FeasibleBundles = B2 + B3
+        bundle_scores = []
+        count = 0
+        for bundle_info in FeasibleBundles:
+            #bundle_info = feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names, round(route_time,2), s_b, count, s_b, e_b, pareto])
+            s_score = 20 - bundle_info[6] #O-D단축 거리.
+            #2-2-1 : e 는 lt가 일정 이상 벗어난 고객 시간
+            if multi_para == True:
+                e_info = []
+                for customer_name in bundle_info[4]:
+                    e_info.append(120 - (now_t - customers[customer_name].time_info[0])) #지나간 시간 더하기.
+                e_score = sum(e_info)
+            else:
+                e_score = 1
+            bundle_scores += [[count, s_score, e_score, 0]]
+            count += 1
+        bundle_scores = ParetoDominanceCount(bundle_scores, 0, 1, 2, 3)
+        if len(bundle_scores) > 0:
+            select_info = FeasibleBundles[bundle_scores[0][0]] + bundle_scores[0]
+            Bundles.append(select_info)
+    #3 FesibleBundle 중 재일 좋은 것을 플랫폼에 추천
+    if len(Bundles) > 0:
+        for bundle in Bundles: #pareto 점수 초기화
+            bundle[10] = 0
+        selected_bundles = ParetoDominanceCount(Bundles, 7, 8, 9, 10)
+        selected_bundle = selected_bundles[0]
+        task_index = max(platform.platform) + 1
+        platform_recommend_bundle_task = GenBundleOrder(task_index, selected_bundle, customers, now_t, M=1000, platform_exp_error=1)
+        platform.platform[task_index] = platform_recommend_bundle_task
+        print('추천 번들 고객 {} / 경로 {}'.format(platform_recommend_bundle_task.customers, platform_recommend_bundle_task.route))
+    print('tset 제안된 번들 확인 {}'.format(len(Bundles)))

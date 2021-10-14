@@ -3,8 +3,7 @@
 #from scipy.stats import poisson
 import time
 #from A1_BasicFunc import distance
-from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,\
-    RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4,GenBundleOrder
+from A2_Func import CountUnpickedOrders, CountIdleRiders, CalculateRho, ConsideredCustomer, RequiredBundleNumber, ConstructBundle, PlatformOrderRevise ,RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise2,PlatformOrderRevise3, PlatformOrderRevise4,GenBundleOrder
 from A3_two_sided import SelectByTwo_sided_way, ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore, CountActiveRider, WeightCalculator, WeightCalculator2, ConstructFeasibleBundle_TwoSided, Calculate_e_b2, Calculate_d_b
 import copy
 import operator
@@ -433,71 +432,6 @@ def Platform_process4(env, platform_set, orders, riders, stores, p2,thres_p,inte
         print('T: {} B2,B3확인'.format(int(env.now)))
         #input('T: {} B2,B3확인'.format(int(env.now)))
         yield env.timeout(interval)
-
-
-
-
-
-def TaskCalculate(rider, platform, customers, now_t, p2 = 0, thres1 = 7, bundle_size=3):
-    """
-    라이더에게 가장 적합한 번들을 탐색 후 제안.
-    1)라이더에게 현재 선택할 만한 Task을 제시 (Task는 single/bubdle 모두 가능)
-    2)다른 라이더들에게 미치는 영향을 고려할 수는 없는가?
-    *Note : 선택하는 주문에 추가적인 조건이 걸리는 경우 ShortestRoute 추가적인 조건을 삽입할 수 있음.
-    @param rider: 라이더 class
-    @param platform: 플랫폼에 올라온 주문들 {[KY]order index : [Value]class order, ...}
-    @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
-    @param now_t: 현재 시간
-    @param p2: 허용 Food Lead Time의 최대 값
-    @param thres1: 정렬 기준 [2:최대 FLT,3:평균 FLT,4:최소FLT,6:경로 운행 시간]
-    @param bundle_size: 구성할 최대 번들 크기 2 or 4
-    @return: None -> 플랫폼 task에 라이더에게 추천하는 번들 추가
-    """
-    #1 단건 주문으로 구성된 주문들을 파악
-    wait_order_names = []
-    for index in platform.platform:
-        task = platform.platform[index]
-        if len(task.customers) == 1:
-            wait_order_names += task.customers
-    #2 번들 구성 하기
-    #2-1 일정 거리 이내의 고객 선별 후
-    target_customers = []
-    for customer_name in customers:
-        customer = customers[customer_name]
-        dist =  math.sqrt((rider.last_departure_loc[0] - customer.store_loc[0]) ** 2 + (rider.last_departure_loc[1] - customer.store_loc[1]) ** 2)/rider.speed
-        #dist = distance(rider.last_departure_loc, customer.store_loc)/rider.speed
-        if dist <= thres1:
-            target_customers.append(customer.name)
-    # 2-2 해당 고객을 target으로 번들 구성
-    Bundles = []
-    for customer_name in target_customers:
-        target_order = customers[customer_name]
-        B2 = ConstructFeasibleBundle_TwoSided(target_order, customers, bundle_size-1, p2, speed = rider.speed)
-        B3 = ConstructFeasibleBundle_TwoSided(target_order, customers, bundle_size, p2, speed = rider.speed)
-        FeasibleBundles = B2 + B3
-        bundle_scores = []
-        count = 0
-        for bundle_info in FeasibleBundles:
-            #bundle_info = feasible_routes.append([route, round(max(ftds),2), round(sum(ftds)/len(ftds),2), round(min(ftds),2), order_names, round(route_time,2), s_b, count, s_b, e_b, pareto])
-            s_score = bundle_info[6] #O-D단축 거리.
-            #2-2-1 : e 는 lt가 일정 이상 벗어난 고객 시간
-            e_info = []
-            for customer_name in bundle_info[4]:
-                e_info.append(1000 - (now_t - customers[customer_name].time_info[0])) #지나간 시간 더하기.
-            e_score = sum(e_info)
-            bundle_scores += [[count, s_score, e_score, 0]]
-            count += 1
-        bundle_scores = ParetoDominanceCount(bundle_scores, 0, 1, 2, 3)
-        select_info = FeasibleBundles[bundle_scores[0][0]] + bundle_scores[0]
-        Bundles.append(select_info)
-    #3 FesibleBundle 중 재일 좋은 것을 플랫폼에 추천
-    for bundle in Bundles: #pareto 점수 초기화
-        bundle[10] = 0
-    selected_bundles = ParetoDominanceCount(Bundles, 7, 8, 9, 10)
-    selected_bundle = selected_bundles[0]
-    task_index = max(platform.platform) + 1
-    platform_recommend_bundle_task = GenBundleOrder(task_index, selected_bundle, customers, now_t, M=1000, platform_exp_error=1)
-    platform.platform[task_index] = platform_recommend_bundle_task
 
 
 def Platform_process5(env, platform_set, orders, riders, stores, p2,thres_p,interval, bundle_permutation_option = False, speed = 1, end_t = 1000, min_pr = 0.05, divide_option = False,\
