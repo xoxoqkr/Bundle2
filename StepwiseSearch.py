@@ -322,10 +322,42 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
         for val in m.getVars():
             if val.VarName[0] == 'x':
                 res.append(float(val.x))
-        return True, res
+        return True, res, m
     except:
         print('Infeasible')
-        return False, None
+        return False, None, m
+
+def ModelUpdate(m, coeff, data, error = 10, print_para = False, cal_type = 'linear'):
+    #1 제약식 추가 부분.
+    z_count = 0
+    index2 = 0
+    z_val = ValueCal(coeff, data[0], cal_type=cal_type)
+    for other_info in data[1:]:
+        compare_val = ValueCal(coeff, other_info, cal_type=cal_type)
+        if print_para == True:
+            if z_val < compare_val:
+                print('Current {}-{} 비교 결과 Z : {} < {} : Val'.format(z_count, index2,  z_val, compare_val))
+            else:
+
+                print('Current {}-{} 비교 결과 Z : {} > {} : Val'.format(z_count, index2, z_val, compare_val))
+        m.addConstr((m.x[0] + coeff[0]) * data[0][0] + (m.x[1] + coeff[1]) * data[0][1] - error >= (m.x[0] + coeff[0]) * other_info[0] + (m.x[1] + coeff[1]) * other_info[1])
+        index2 += 1
+    #2 model 수정
+    m.Reset()
+    m.setParam(GRB.Param.OutputFlag, 0)
+    m.Params.method = -1
+    m.optimize
+    try:
+        print('Obj val: %g' % m.objVal)
+        res = []
+        for val in m.getVars():
+            if val.VarName[0] == 'x':
+                res.append(float(val.x))
+        return True, res, m
+    except:
+        print('Infeasible')
+        return False, None, m
+
 
 class LP_search(object):
     def __init__(self, name, func, init, T = 50, engine_type = 'Gurobi'):
@@ -345,7 +377,7 @@ class LP_search(object):
             data.append(customers[name].data_vector)
         #input('초기 값 {} 입력 데이터 {}'.format(self.init, data))
         if self.engine_type == 'Gurobi':
-            feasiblity, res = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
+            feasiblity, res, model = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
         else:
             feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
         if feasiblity == True:
@@ -357,7 +389,7 @@ class LP_search(object):
             #input('해 없음'.format())
             #print('확인용 계산: 라이더의 Coeff {} : 오라클의 Coeff {}'.format())
             if self.engine_type == 'Gurobi':
-                feasiblity2, res2 = ReviseCoeff_MJByGurobi(self.true_coeff, data, self.past_data, error= 0, print_para= False)
+                feasiblity2, res2, model = ReviseCoeff_MJByGurobi(self.true_coeff, data, self.past_data, error= 0, print_para= False)
             else:
                 feasiblity2, res2 = ReviseCoeff_MJByCplex(self.true_coeff, data, self.past_data, error=0, print_para=False)
             #input('진짜 해에 대한 결과 {} : {}'.format(feasiblity2, res2))

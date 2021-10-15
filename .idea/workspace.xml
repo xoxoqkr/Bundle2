@@ -5,19 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="25316376-12fa-402b-8340-7e2edf30faaf" name="Changes" comment="10/13 코드 수정 완료">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Simulator_v2.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/import_test.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/Bundle2.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/Bundle2.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/other.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/A1_BasicFunc.py" beforeDir="false" afterPath="$PROJECT_DIR$/A1_BasicFunc.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/A1_Class.py" beforeDir="false" afterPath="$PROJECT_DIR$/A1_Class.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/A2_Func.py" beforeDir="false" afterPath="$PROJECT_DIR$/A2_Func.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/A3_two_sided.py" beforeDir="false" afterPath="$PROJECT_DIR$/A3_two_sided.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Bundle_Run_ver0.py" beforeDir="false" afterPath="$PROJECT_DIR$/Bundle_Run_ver0.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Simulator_v1.py" beforeDir="false" afterPath="$PROJECT_DIR$/Simulator_v1.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/StepwiseSearch.py" beforeDir="false" afterPath="$PROJECT_DIR$/StepwiseSearch.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/import_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/import_test.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,7 +39,7 @@
     <property name="node.js.selected.package.eslint" value="(autodetect)" />
     <property name="node.js.selected.package.tslint" value="(autodetect)" />
   </component>
-  <component name="RunManager" selected="Python.Simulator_v2">
+  <component name="RunManager" selected="Python.import_test">
     <configuration name="A1_BasicFunc" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="Bundle2" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -86,28 +76,6 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/A1_Class.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="A3_two_sided" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="Bundle2" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/A3_two_sided.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -160,13 +128,35 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="import_test" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="Bundle2" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/import_test.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.import_test" />
         <item itemvalue="Python.Simulator_v2" />
         <item itemvalue="Python.Simulator_v1" />
         <item itemvalue="Python.A1_BasicFunc" />
         <item itemvalue="Python.A1_Class" />
-        <item itemvalue="Python.A3_two_sided" />
       </list>
     </recent_temporary>
   </component>
@@ -178,8 +168,16 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1634009405353</updated>
-      <workItem from="1634009407187" duration="24756000" />
+      <workItem from="1634009407187" duration="35061000" />
     </task>
+    <task id="LOCAL-00001" summary="10/13 코드 수정 완료">
+      <created>1634174497463</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1634174497463</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -203,7 +201,7 @@
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/Bundle2$.coverage" NAME=" Coverage Results" MODIFIED="1634009759954" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bundle2$Simulator_v1.coverage" NAME="Simulator_v1 Coverage Results" MODIFIED="1634114513934" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/Bundle2$import_test.coverage" NAME="import_test Coverage Results" MODIFIED="1634020941374" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/Bundle2$import_test.coverage" NAME="import_test Coverage Results" MODIFIED="1634177485805" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bundle2$Simulator_v2.coverage" NAME="Simulator_v2 Coverage Results" MODIFIED="1634115038163" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bundle2$A1_Class.coverage" NAME="A1_Class Coverage Results" MODIFIED="1634021640429" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/Bundle2$A1_BasicFunc.coverage" NAME="A1_BasicFunc Coverage Results" MODIFIED="1634021669183" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
