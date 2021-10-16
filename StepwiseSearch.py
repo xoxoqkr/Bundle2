@@ -327,7 +327,7 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
         print('Infeasible')
         return False, None, m
 
-def ModelUpdate(m, coeff, data, error = 10, print_para = False, cal_type = 'linear'):
+def GurobiModelUpdate(m, coeff, data, error = 10, print_para = False, cal_type = 'linear'):
     #1 제약식 추가 부분.
     z_count = 0
     index2 = 0
