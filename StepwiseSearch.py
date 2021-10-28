@@ -22,7 +22,6 @@ def ValueCal(coeff, vector, cal_type = 'linear'):
     if cal_type == 'log':
         val = LogScore(coeff, vector)
     elif cal_type == 'linear':
-
         val = numpy.dot(coeff, vector)
     else:
         val = 0
@@ -59,9 +58,11 @@ class Rider(object):
         for order_name in orders:
             order = orders[order_name]
             if order.selected == False:
+                #print('주문 점수 정보{} {}'.format(self.coeff_vector, order.data_vector))
                 score = ValueCal(self.coeff_vector, order.data_vector, cal_type= self.cal_type) + order.subsidy
                 scores.append([order_name, score])
         scores.sort(key=operator.itemgetter(1), reverse = True)
+        #print('점수들 {} ~ {}'.format(scores[:4],scores[-3:]))
         if len(scores) > 0:
             orders[scores[0][0]].selected = True
             names = []
@@ -242,18 +243,17 @@ def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_par
         #input('CPLEX 확인2')
         return True, res
 
-def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_para = False, cal_type = 'linear'):
+def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_para = False, cal_type = 'linear', M = 100):
     coeff = list(range(len(init_coeff)))
     # D.V. and model set.
     m = gp.Model("problem1")
     x = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="x")
-    #z = m.addVars(1 + len(past_data), vtype = GRB.CONTINUOUS, name= "z")
     a = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="a")
     u = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="u")
 
-    #m.setObjective(gp.quicksum(x[i] for i in coeff), GRB.MINIMIZE)
-    #m.setObjective(gp.quicksum(u[i] for i in coeff), GRB.MINIMIZE)
-    m.setObjective(u[0] + u[1], GRB.MINIMIZE)
+    m.setObjective(gp.quicksum(x[i] for i in coeff), GRB.MINIMIZE) #obj
+
+    #m.setObjective(u[0] + u[1], GRB.MINIMIZE)
     m.addConstrs(x[i] <= u[i] for i in coeff)
     m.addConstrs(-x[i] <= u[i] for i in coeff)
 
@@ -346,7 +346,7 @@ def ModelUpdate(m, coeff, data, error = 10, print_para = False, cal_type = 'line
     m.Reset()
     m.setParam(GRB.Param.OutputFlag, 0)
     m.Params.method = -1
-    m.optimize
+    m.optimize()
     try:
         print('Obj val: %g' % m.objVal)
         res = []
@@ -357,6 +357,86 @@ def ModelUpdate(m, coeff, data, error = 10, print_para = False, cal_type = 'line
     except:
         print('Infeasible')
         return False, None, m
+
+def UpdateGurobiModel(coeff, data, past_data = [], print_para = False, cal_type = 'linear', M = 100):
+    """
+    주어진 coeff를 새로운 data에 대해 재계산하고 갱신함.
+    Args:
+        coeff: weight vector
+        data: new data [[selected order], [other 1],...,[other n]]
+        past_data: optional [data0, data1,...,data n]
+        print_para: print option
+        cal_type: print option 2
+        M: penalty for slack variable y
+
+    Returns: weight vector
+
+    """
+    #확장형 1.2를 고려한 확장형2
+    w_index = list(range(len(coeff)))
+    # D.V. and model set.
+    model = gp.Model("problem1_3")
+    w = model.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="w")
+    z = model.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="z")
+    y = model.addVars(len(data) + len(past_data), vtype=GRB.CONTINUOUS, name="y")
+
+    model.setObjective(gp.quicksum(z) + M*gp.quicksum(y), GRB.MINIMIZE)
+
+    model.addConstrs(coeff[i] - w[i] <= z[i] for i in w_index) #linearization part
+    model.addConstrs(coeff[i] - w[i]  >= -z[i] for i in w_index)
+
+    z_count = 0 #D_new part
+    if print_para == True:
+        score = ValueCal(coeff, data[0], cal_type=cal_type)
+        print('선택 고객 z {} '.format(score))
+    #print('확인 {} : {}'.format(coeff, data[0]))
+    z_val = ValueCal(coeff, data[0], cal_type=cal_type)
+    data_index = 0
+    for other_info in data[1:]:
+        compare_val = ValueCal(coeff, other_info, cal_type=cal_type)
+        if print_para == True:
+            if z_val < compare_val:
+                print('Current {}-{} 비교 결과 Z : {} < {} : Val'.format(z_count, data_index, z_val, compare_val))
+            else:
+                print('Current {}-{} 비교 결과 Z : {} > {} : Val'.format(z_count, data_index, z_val, compare_val))
+        model.addConstr(gp.quicksum(data[0][i]*(coeff[i] + w[i]) for i in w_index) + y[z_count]
+                    >= gp.quicksum(data[data_index][i]*(coeff[i] + w[i]) for i in w_index))
+        data_index += 1
+    z_count += 1
+    #2 model 수정
+    if len(past_data) > 0:
+        for data in past_data:
+            z_val_old = ValueCal(coeff, data[0], cal_type=cal_type)
+            p_selected = data[0]
+            p_others = data[1:]
+            data_index2 = 0
+            for p_other_info in p_others:
+                compare_val_old = ValueCal(coeff, p_other_info, cal_type=cal_type)
+                if print_para == True:
+                    if z_val_old < compare_val_old:
+                        print('Past {}-{} 비교 결과 Z : {} < {} : Val'.format(z_count, data_index2,  z_val_old, compare_val_old))
+                    else:
+                        print('Past {}-{} 비교 결과 Z : {} > {} : Val'.format(z_count, data_index2, z_val_old, compare_val_old))
+                    pass
+                model.addConstr(gp.quicksum(p_selected[i] * (coeff[i] + w[i]) for i in w_index) + y[z_count]
+                                >= gp.quicksum(p_other_info[i] * (coeff[i] + w[i]) for i in w_index))
+                data_index2 += 1
+            z_count += 1
+    #3 model 풀이
+    model.setParam(GRB.Param.OutputFlag, 0)
+    #model.Params.method = -1
+    model.optimize()
+    try:
+        print('Obj val 출력: %g' % model.objVal)
+        res = []
+        for val in model.getVars():
+            if val.VarName[0] == 'w':
+                res.append(float(val.x))
+        return True, res, model
+    except:
+        print('Infeasible')
+        return False, None, model
+
 
 
 class LP_search(object):
@@ -377,7 +457,9 @@ class LP_search(object):
             data.append(customers[name].data_vector)
         #input('초기 값 {} 입력 데이터 {}'.format(self.init, data))
         if self.engine_type == 'Gurobi':
-            feasiblity, res, model = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
+            #feasiblity, res, model = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
+            feasiblity, res, model = UpdateGurobiModel(self.init, data, self.past_data)
+            #feasiblity, res, model = UpdateGurobiModel(self.init, data)
         else:
             feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
         if feasiblity == True:
@@ -491,13 +573,13 @@ def A2_part1(exp_coeff, orders, cal_type='linear', buffer = 0.01):
 org_value = []
 exp_value = []
 dis_value = []
-for ITE_num in range(20):
+for ITE_num in range(1):
     #1라이더 정의
     Riders = {}
-    #vector = [round(random.random(),2), -round(random.random(),2), round(random.random(),2)] #선형인 경우
-    vector = [2 + round(random.random(), 2), 2 + round(random.random(), 2),2 + round(random.random(), 2)] #지수형인 경우
+    vector = [0.5 + round(random.random(),2), -round(random.random(),2), round(random.random(),2)] #선형인 경우
+    #vector = [2 + round(random.random(), 2), 2 + round(random.random(), 2),2 + round(random.random(), 2)] #지수형인 경우
     #vector = []
-    cal_type = 'log' #linear / log
+    cal_type = 'linear' #linear / log
     for name in range(3):
         r = Rider(name, vector, cal_type = cal_type)
         Riders[name] = r
@@ -516,7 +598,7 @@ for ITE_num in range(20):
     engine_reverse.xlim = [-1.5,1.5]
     engine_reverse.ylim = [-1.5,1.5]
     #init_vector = [round(random.random(),2),-round(random.random(),2)]
-    init_vector = [0.5,0.5]
+    init_vector = [0.5, -0.5, 0.5]
     print('초기 값', init_vector)
     LP_engineByGurobi = LP_search(1, None, init_vector, engine_type='Gurobi')
     LP_engineByCplex = LP_search(1, None, init_vector, engine_type='Cplex')
@@ -536,33 +618,35 @@ for ITE_num in range(20):
             name_end = len(Orders) + 10
             for name in range(name_start, name_end):
                 vector = random.sample(pool,3)
-                vector = random.sample(pool, 2) + [random.choice([0,1])]
+                #vector = random.sample(pool, 2) + [random.choice([0,1])]
                 o = Order(name, vector, cal_type = cal_type)
                 Orders[name] = o
         for rider_name in Riders:
             rider = Riders[rider_name]
             ob = rider.SelectOrder(Orders)
+            #print('라이더 선택 주문 {}'.format(ob[0]))
             if ob[0] != None:
                 observation.append(ob)
         for ob in observation:
-            print('대상 데이터 {}'.format(ob))
-            engine_forward.Updater(ob, Orders, Riders[0])
-            engine_reverse.Updater(ob, Orders, Riders[0])
-            #LP_engineByGurobi.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
+            #print('대상 데이터 {}'.format(ob))
+            #engine_forward.Updater(ob, Orders, Riders[0])
+            #engine_reverse.Updater(ob, Orders, Riders[0])
+            LP_engineByGurobi.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
             #LP_engineByCplex.LP_Solver(ob, Orders)
             #Coeff_Check(Riders[0].coeff_vector, LP_engine.past_data)
-            print('확인용 계산: 라이더의 Coeff {} : 오라클(Gurobi)의 Coeff {} : 오라클(Cplex)의 Coeff {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
-            print('실제값 {} -> Gurobi 예측 값 {} : Cplex 예측 값 {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.init , LP_engineByCplex.init))
+            #print('확인용 계산: 라이더의 Coeff {} : 오라클(Gurobi)의 Coeff {} : 오라클(Cplex)의 Coeff {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
+            #print('실제값 {} -> Gurobi 예측 값 {} : Cplex 예측 값 {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.init , LP_engineByCplex.init))
         if engine_forward.ite % engine_forward.T == 0 and engine_forward.ite > 0:
             #engine_forward.NetUpdater()
             pass
         if engine_reverse.ite % engine_reverse.T == 0 and engine_reverse.ite > 0:
-            engine_reverse.NetUpdaterReverse()
-            print('현재 ite : {} / 존재 p 수 : {}'.format(t, len(engine_reverse.nets)))
+            #engine_reverse.NetUpdaterReverse()
+            #print('현재 ite : {} / 존재 p 수 : {}'.format(t, len(engine_reverse.nets)))
+            pass
         #GrahDraw(engine_forward, Riders[0])
         #GrahDraw(engine_reverse, Riders[0], info = 'backward')
         #input('LP_search 결과 {} : 실제 {}'.format(LP_engine.init, Riders[0].coeff_vector))
-        print('LP_Gurobi 결과 {} : LP_Cplex 결과 {} :실제 {}: 시작 값 {}'.format(LP_engineByGurobi.init,LP_engineByCplex.init, Riders[0].coeff_vector, init_vector))
+        #print('LP_Gurobi 결과 {} : LP_Cplex 결과 {} :실제 {}: 시작 값 {}'.format(LP_engineByGurobi.init,LP_engineByCplex.init, Riders[0].coeff_vector, init_vector))
         """
         if engine_reverse.ite % engine_reverse.T == 0 and engine_reverse.ite > 0:
             engine_reverse.NetUpdaterReverse()
@@ -573,18 +657,19 @@ for ITE_num in range(20):
         """
         engine_forward.ite += 1
         engine_reverse.ite += 1
-        print('ITE {} 종료'.format(t))
-    print('True 라이더 계수 {}'.format(Riders[0].coeff_vector))
-    print('남은 p 수 : {} 내용 {}'.format(len(engine_reverse.nets),engine_reverse.nets))
+        print('ITE {} 실제 값 {} :: {} 계산 값'.format(t, Riders[0].coeff_vector, LP_engineByGurobi.init))
     #input('확인')
+    """
     try:
+        print('True 라이더 계수 {}'.format(Riders[0].coeff_vector))
+        print('남은 p 수 : {} 내용 {}'.format(len(engine_reverse.nets), engine_reverse.nets))
         print('라이더의 벡터 : {} 비율 : {}'.format(Riders[0].coeff_vector,Riders[0].coeff_vector[0]/Riders[0].coeff_vector[1]))
     except:
         pass
     #foward_Search = GrahDraw(engine_forward, Riders[0], centre= True)
     #reverse_Search = GrahDraw(engine_reverse, Riders[0], centre= True, saved_info='backward2')
     #print('foward_Search 클러스터 {}'.format(foward_Search))
-
+    
     #A2알고리즘 부분
     engine_coeff = list(engine_reverse.nets.keys())[0]
     engine_coeff = list(engine_coeff)
@@ -636,7 +721,7 @@ for ITE_num in range(20):
     f.write(info)
     f.close()
     #input('A2 정지')
-    """
+    
     #print('reverse_Search 클러스터 {} : 남은 해들 {}'.format(reverse_Search, list(engine_reverse.nets.keys())))
     input('정지')
 
