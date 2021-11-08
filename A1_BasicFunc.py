@@ -6,9 +6,7 @@ import csv
 import numpy.random
 import time
 import A1_Class
-#from A2_Func import *
-#from A2_Func import GenBundleOrder
-#from A3_two_sided import ParetoDominanceCount, ConstructFeasibleBundle_TwoSided
+import re_A1_class
 
 def distance(p1, p2):
     """
@@ -145,7 +143,8 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
     """
     rider_num = 0
     while env.now <= runtime and rider_num <= gen_num:
-        single_rider = A1_Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
+        #single_rider = A1_Class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
+        single_rider = re_A1_class.Rider(env,rider_num,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, capacity = capacity, freedom=freedom, order_select_type = score_type, wait_para =wait_para, uncertainty = uncertainty, exp_error = exp_error)
         single_rider.exp_wage = exp_WagePerHr
         Rider_dict[rider_num] = single_rider
         #print('T {} 라이더 {} 생성'.format(int(env.now), rider_num))
@@ -194,7 +193,10 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
         wait_para = data[7]
         uncertainty = data[8]
         exp_error = data[9]
-        single_rider = A1_Class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
+        #single_rider = A1_Class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
+        #                           capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
+        #                              uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend)
+        single_rider = re_A1_class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
                                    capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
                                       uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend)
         single_rider.exp_wage = exp_WagePerHr
@@ -468,7 +470,10 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
             decision_interval = rider.decision_moment[time_index] - rider.decision_moment[time_index - 1]
             decision_moment.append(decision_interval)
         #print('주문간격 시점 데이터 {}'.format(decision_moment))
-        decision_moment = round(sum(decision_moment) / len(decision_moment), 2)
+        try:
+            decision_moment = round(sum(decision_moment) / len(decision_moment), 2)
+        except:
+            decision_moment = 0
         #print('평균 주문간격{}'.format(decision_moment))
         info = [rider_name, len(rider.served), rider.idle_time, rider.b_select,rider.num_bundle_customer, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,decision_moment,rider.visited_route]
         rider_infos.append(info)

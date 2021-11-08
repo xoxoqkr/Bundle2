@@ -91,3 +91,32 @@ def Bundle_selection_problem2(F):
     except:
         print('Infeasible')
         return False, []
+
+def Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr):
+    bundle_indexs = list(range(len(s_b)))
+
+    m = gp.Model("mip1")
+    x = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="x")
+    z = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="z")
+
+    #Set objective function
+    m.setObjective(gp.quicksum(s_b[i]*x[i] - z[i] for i in bundle_indexs) , GRB.MAXIMIZE)
+
+    for i in bundle_indexs:
+        m.addConstr(x[i] * gp.quicksum(x[j]*d_matrix[i][j]  for j in bundle_indexs) == 0)
+
+    m.addConstrs(x[i] * phi_b[i] - z[i] <= min_pr for i in bundle_indexs)
+    #풀이
+    m.optimize()
+    try:
+        print('Obj val: %g' % m.objVal)
+        res = []
+        count = 0
+        for val in m.getVars():
+            if val.VarName[0] == 'x' and float(val.x) == 1.0:
+                res.append(count)
+            count += 1
+        return res
+    except:
+        print('Infeasible')
+        return []

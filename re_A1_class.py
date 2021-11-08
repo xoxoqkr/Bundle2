@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import platform
+
 import A3_two_sided
 import A1_BasicFunc as Basic
 from scipy.stats import poisson
@@ -34,7 +36,8 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True, max_order_num = 5, order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, platform_recommend = False):
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True,
+                 order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, platform_recommend = False, p_ij = [0.5,0.3,0.2]):
         self.name = i
         self.env = env
         self.gen_time = int(env.now)
@@ -75,6 +78,10 @@ class Rider(object):
         self.next_search_time = 0 #다음에 주문을 선택할 시점
         self.last_pick_time = 0 #저번에 주문을 선택한 시점
         self.platform_recommend = platform_recommend
+        self.check_t = 0.1
+        self.empty_serach_count = 0
+        self.p_j = p_ij
+        self.bundle_construct = False
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
         env.process(self.TaskSearch(env, platform, customers, p2=self.p2, order_select_type=order_select_type, uncertainty=uncertainty))
 
@@ -166,74 +173,88 @@ class Rider(object):
                     self.visited_route[-1][3] = int(env.now)
                     del self.route[0]
                     print('남은 경로 {}'.format(self.route))
-            freedom_para = True #todo : 라이더의 임의 주문 선택을 방지.
-            if freedom == False:
-                if len(self.route) > 0:
-                    freedom_para == False
-            if len(self.onhand) < self.capacity and freedom_para == True:
-                print('T{} 라이더 {} 추가 탐색 시작'.format(env.now, self.name))
-                test = []
-                print('플랫폼 ID 확인 {}'.format(id(platform)))
-                for index in platform.platform:
-                    test += [platform.platform[index].customers]
-                #t1 = time.time()
-                uppicked_order_num = 0
-                for order_index in platform.platform:
-                    if platform.platform[order_index].picked == False:
-                        uppicked_order_num += 1
-                print('플랫폼의 주문 수 {}/ 대기 중인 주문 수 {}'.format(len(platform.platform),uppicked_order_num))
-                self.candidates.append(len(platform.platform))
-                order_info = self.OrderSelect(platform, customers, p2 = p2, score_type= order_select_type, uncertainty = uncertainty) #todo : 라이더의 선택 과정
-                if order_info != None:
-                    #input('체크')
-                    print('T {} 라이더 {} 주문 {} 선택 : 주문 고객 {}'.format(int(env.now),self.name, order_info[0], order_info[1]))
-                    self.decision_moment.append(round(env.now,2))
-                    #print('라이더 {} :: 간격 {} 현재 {} 최근 시점 {}'.format(self.name, self.decision_moment[-1], env.now, self.decision_moment[-2]))
-                    added_order = platform.platform[order_info[0]]
-                    if len(added_order.customers) > 1:
-                        #input('라이더 {} 번들 {} 선택'.format(self.name, added_order.route))
-                        pass
-                    else:
-                        #input('라이더 {} 주문 {} 선택'.format(self.name, added_order.route))
-                        pass
-                    self.OrderPick(added_order, order_info[1], customers, env.now, route_revise_option = order_select_type)
-                    if len(added_order.route) > 2:
-                        self.b_select += 1
-                        self.num_bundle_customer += len(added_order.customers)
-                    Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
-                else:
-                    if len(self.route) > 0:
-                        pass
-                    else:
-                        yield env.timeout(wait_time)
-                        self.idle_time += wait_time
-                        print('라이더 {} -> 주문탐색 {}~{}'.format(self.name, int(env.now) - wait_time, int(env.now)))
+            else:
+                #self.TaskSearchProcess(env, platform, customers, p2=p2, score_type=order_select_type,uncertainty=uncertainty)
+                self.empty_serach_count += 1
+                yield env.timeout(2.1*self.check_t)
 
 
-    def TaskSearch(self, env, platform, customers, p2=0, order_select_type='simple', uncertainty=False):
-        check_t = 0.1
+    def TaskSearch(self, env, platform, customers, p2=0, order_select_type='simple', uncertainty=False, score_type = 'simple'):
         while int(env.now) < self.end_t:
             if len(self.route)  == 0 or env.now >= self.next_search_time:
-                self.TaskSearchProcess(env, platform, customers, p2=p2, score_type=order_select_type,
-                                       uncertainty=uncertainty)
+                #order_info = self.OrderSelect(platform, customers, p2=p2, score_type=score_type,uncertainty=uncertainty)  # todo : 라이더의 선택 과정
+                order_info = self.OrderSelect2(platform, customers, p2=p2, uncertainty=uncertainty)
+                if order_info != None:
+                    self.OrderPick(order_info, order_info[1], customers, env.now,route_revise_option=score_type)  # 라우트 결정 후
+                    self.last_pick_time = env.now
+                    if order_info[8] == 'platform' and len(order_info[5]) > 0:
+                        self.b_select += 1
+                        self.num_bundle_customer += len(order_info[5])
+                    Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
                 next = numpy.random.poisson(self.search_lamda)
                 self.next_search_time += next
-                yield env.timeout(max(next - check_t, check_t))
+                yield env.timeout(next)
             else:
-                yield env.timeout(check_t)
+                yield env.timeout(self.check_t)
 
-    def TaskSearchProcess(self, env, platform, customers, p2=0, score_type='simple', uncertainty=False):
-        order_info = self.OrderSelect(platform, customers, p2=p2, score_type=score_type,
-                                      uncertainty=uncertainty)  # todo : 라이더의 선택 과정
-        if order_info != None:
-            print('T {} 라이더 {} 주문 {} 선택 : 주문 고객 {}'.format(int(env.now), self.name, order_info[0], order_info[1]))
-            added_task = platform.platform[order_info[0]]
-            self.OrderPick(added_task, order_info[1], customers, env.now, route_revise_option= score_type) #라우트 결정 후
-            self.last_pick_time = env.now
-            if len(added_task.route) > 2:
-                self.b_select += 1
-                self.num_bundle_customer += len(added_task.customers)
-            Basic.UpdatePlatformByOrderSelection(platform, order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
+    def OrderSelect2(self, platform, customers, p2, uncertainty, l = 4):
+        #플랫폼의 개별 점수에 대해 계산
+        scores = []
+        bound_order_names = []
+        bundle_task_names = []
+        for index in platform.platform:
+            task = platform.platform[index]
+            if task.picked == False:
+                dist = Basic.distance(self.last_departure_loc,task.route[0][2]) / self.speed  # 자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
+                if len(task.customers) > 1:
+                    bundle_task_names.append([task.index, dist])
+            bound_order_names.append([task.index, dist])
+        bound_order_names.sort(key=operator.itemgetter(1))
+        rv = random.random()
+        page = 1
+        for pr in self.p_j:
+            if rv > pr:
+                page = self.p_j.index(pr)
+                break
+        considered_tasks = bound_order_names[:page*l]
+        #input(considered_tasks)
+        considered_tasks_names = []
+        for task_info in considered_tasks:
+            considered_tasks_names += platform.platform[task_info[0]].customers
+        for task_info in considered_tasks:
+            task = platform.platform[task_info[0]]
+            #1해당 테스크의 점수 계산
+            mv_time = 0
+            times = []
+            if len(self.route) > 0:
+                rev_route = [self.route[-1][2]]
+            else:
+                rev_route = [self.last_departure_loc]
+            for route_info in task.route:
+                rev_route.append(route_info[2])
+            for node_index in range(1, len(rev_route)):
+                mv_time += Basic.distance(rev_route[node_index - 1], rev_route[node_index]) / self.speed
+            for customer_name in task.customers:
+                mv_time += customers[customer_name].time_info[6] + customers[customer_name].time_info[7]  # 예상 가게 준비시간
+                times.append(self.env.now - customers[customer_name].time_info[0])
+            WagePerMin = round(task.fee / mv_time, 2)  # 분당 이익
+            if type(task.route) == tuple:
+                task.route = list(task.route)
+            scores.append([task.index,task.route, None, None, None, task.customers, None,WagePerMin,'platform'])
+            #input(scores)
+            #2 라이더가 번들을 구성하는 경우
+            if self.bundle_construct == True:
+                best_route_info = self.ShortestRoute(task, customers, p2=p2, uncertainty=uncertainty) #task가 산입될 수 있는 가장 좋은 경로
+                # best_route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
+                if len(route_info) > 0:
+                    benefit = task.fee / best_route_info[5]  # 이익 / 운행 시간
+                    scores.append([task.index] + best_route_info + [benefit] + ['rider'])
+            #3가장 높은 점수 주문 선택
+            scores.sort(key=operator.itemgetter(7), reverse=True)
+        if len(scores) > 0:
+            return scores[0]
+        else:
+            return None
 
 
     def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None, add = 'X'):
@@ -321,7 +342,7 @@ class Rider(object):
             return None
 
 
-    def ShortestRoute(self, order, customers, now_t = 0, p2 = 0, M = 1000, uncertainty = False):
+    def ShortestRoute(self, order, customers, cosndiered_cutmer_names = [],now_t = 0, p2 = 0, M = 1000, uncertainty = False):
         """
         order를 수행할 수 있는 가장 짧은 경로를 계산 후, 해당 경로의 feasible 여/부를 계산
         반환 값 [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
@@ -334,14 +355,6 @@ class Rider(object):
         @return: 최단 경로 정보 -> [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
         """
         prior_route = []
-        #input('주문 {} 고객정보 {} /이미 방문 경로 {}/ 남은 경로 {}'.format(order.index, order.customers, self.visited_route, self.route))
-        """
-        for visitied_node in self.visited_route:
-            for node in input_route:
-                if node[0] == visitied_node[0]:
-                    prior_route.append(visitied_node[0] + M)
-                    break        
-        """
         index_list = []
         except_names = []
         for visitied_node in self.visited_route:
@@ -361,8 +374,6 @@ class Rider(object):
             for prior in prior_route:
                 if prior < M and customers[prior].time_info[3] != None:
                     already_served_customer_names.append(prior)
-        #self.route에 있는 가장 이른 노드의 정보를 포함하는 prior route가 구성됨.
-        #input('기 방문 노드 {}'.format(prior_route))
         order_names = []  # 가게 이름?
         store_names = []
         for customer_name in order.customers:
@@ -463,7 +474,7 @@ class Rider(object):
         else:
             return []
 
-    def OrderPick(self, order, route, customers, now_t, route_revise_option = 'simple'):
+    def OrderPick(self, order_info, route, customers, now_t, route_revise_option = 'simple'):
         """
         수행한 order에 대한 경로를 차량 경로self.route에 반영하고, onhand에 해당 주문을 추가.
         @param order: class order
@@ -471,8 +482,7 @@ class Rider(object):
         @param customers: 발생한 고객들 {[KY]customer name : [Value]class customer, ...}
         @param now_t: 현재 시간
         """
-        order.picked = True
-        names = order.customers
+        names = order_info[5]
         for name in names:
             customers[name].time_info[1] = now_t
             if len(names) > 1:
@@ -488,7 +498,7 @@ class Rider(object):
         else:# Shortest path를 이용해 고객을 선택하기 때문에, 갱신된 경로를 현재 경로에 새롭게 추가되는 고객을 추가해야 함.
             self.route = route
         self.onhand += names
-        self.picked_orders.append([order.index, names])
+        self.picked_orders.append([order_info[0], names])
         print('라이더 {} 수정후 경로 {}/ 보유 고객 {}/ 추가된 고객 {}'.format(self.name, self.route, self.onhand, names))
 
 

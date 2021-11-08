@@ -2,28 +2,22 @@
 import csv
 import time
 import simpy
-import random
-import copy
-#from Cython.Includes.libcpp.vector import
-from A1_Class import Store, Platform_pool, scenario
-from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave, SaveInstanceAsCSV, GenerateStoreByCSV, RiderGeneratorByCSV, OrdergeneratorByCSV
-from A2_Func import Platform_process, ResultPrint
-
-
-from Bundle_Run_ver0 import Platform_process3, Platform_process4
-
+from A1_Class import Platform_pool, scenario
+from A1_BasicFunc import ResultSave, GenerateStoreByCSV, RiderGeneratorByCSV, OrdergeneratorByCSV
+from A2_Func import ResultPrint
+from re_platform import Platform_process5
 
 # Parameter define
 order_interval = 2
 interval = 5
-run_time = 100
+run_time = 400
 cool_time = 30  # run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True  # 음식 주문 불확실성 고려
 rider_exp_error = 1.5  # 라이더가 가지는 불확실성
 platform_exp_error = 1.2  # 플랫폼이 가지는 불확실성
 cook_time_type = 'uncertainty'
 cooking_time = [7, 1]  # [평균, 분산]
-thres_p = 1
+thres_p = 0
 
 rider_working_time = 120
 # env = simpy.Environment()
@@ -60,7 +54,7 @@ v2 = [False]
 v3 = ['myopic', 'two_sided']
 #v4 = ['setcover','greedy']
 v4 = ['greedy']
-platform_recommend = False  #True ; False
+platform_recommend = True  #True ; False
 order_select_type = 'simple' #oracle ; simple
 info = ['C', False, False, 'myopic', True]
 
@@ -70,6 +64,7 @@ for i in v1:
             for l in v4:
                 sc2 = scenario('C', True, True, scoring_type = k, considered_customer_type=i, unserved_bundle_order_break = j, bundle_selection_type = l)
                 scenarios.append(sc2)
+
 scenarios = scenarios[:1]
 
 #input('확인 {}'.format(len(scenarios)))
@@ -90,6 +85,7 @@ for ite in range(0, 5):
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
         env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity, platform_recommend = platform_recommend, input_order_select_type = order_select_type))
         env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict))
+        env.process(Platform_process5(env, Platform2, Orders, Rider_dict, p2,thres_p,interval, bundle_para= platform_recommend))
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed, riders = Rider_dict)
         sc.res.append(res)
