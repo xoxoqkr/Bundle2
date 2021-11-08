@@ -12,11 +12,10 @@ from sklearn.cluster import KMeans
 import pandas as pd
 import gurobipy as gp
 from gurobipy import GRB
-from docplex.mp.model import Model
+
+#from docplex.mp.model import Model
 #from docplex.mp.constr import *
-from docplex.mp.constr import (LinearConstraint as DocplexLinearConstraint,
-                               QuadraticConstraint as DocplexQuadraticConstraint,
-                               NotEqualConstraint, IfThenConstraint)
+#from docplex.mp.constr import (LinearConstraint as DocplexLinearConstraint,QuadraticConstraint as DocplexQuadraticConstraint,NotEqualConstraint, IfThenConstraint)
 
 def ValueCal(coeff, vector, cal_type = 'linear'):
     if cal_type == 'log':
@@ -200,7 +199,7 @@ def Coeff_Check(coeff, datas, cal_type = 'linear'):
             count2 += 1
         count1 += 1
 
-
+"""
 def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_para = False):
     coeff = list(range(len(init_coeff)))
     # D.V. and model set.
@@ -241,7 +240,7 @@ def ReviseCoeff_MJByCplex(init_coeff, now_data, past_data, error = 10, print_par
         print(res)
         #input('CPLEX 확인2')
         return True, res
-
+"""
 def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_para = False, cal_type = 'linear'):
     coeff = list(range(len(init_coeff)))
     # D.V. and model set.
@@ -250,10 +249,10 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
     #z = m.addVars(1 + len(past_data), vtype = GRB.CONTINUOUS, name= "z")
     a = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="a")
     u = m.addVars(len(coeff), vtype=GRB.CONTINUOUS, name="u")
-
+    error = m.addVars(len(past_data) + 1,vtype = GRB.CONTINUOUS, name = 'e')
     #m.setObjective(gp.quicksum(x[i] for i in coeff), GRB.MINIMIZE)
     #m.setObjective(gp.quicksum(u[i] for i in coeff), GRB.MINIMIZE)
-    m.setObjective(u[0] + u[1], GRB.MINIMIZE)
+    m.setObjective(u[0] + u[1] + 1000*gp.quicksum(error), GRB.MINIMIZE)
     m.addConstrs(x[i] <= u[i] for i in coeff)
     m.addConstrs(-x[i] <= u[i] for i in coeff)
 
@@ -271,6 +270,7 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
 
     #m.addConstr(z[z_count] - error == (x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1])
     #m.addConstr(z[z_count] >= 0)
+    print('init_coeff {} nowdata {}'.format(init_coeff,now_data[0]))
     z_val = ValueCal(init_coeff, now_data[0], cal_type=cal_type)
     index2 = 0
     for other_info in now_data[1:]:
@@ -282,7 +282,7 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
                 print('Current {}-{} 비교 결과 Z : {} > {} : Val'.format(z_count, index2, z_val, compare_val))
         #m.addConstr(gp.quicksum((x[i] + init_coeff[i])*other_info[i] for i in coeff) <= z[z_count] - error)
         #m.addConstr( z[z_count] - error >= (x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
-        m.addConstr( (x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1] - error >= (x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
+        m.addConstr( (x[0] + init_coeff[0]) * now_data[0][0] + (x[1] + init_coeff[1]) * now_data[0][1] + error[z_count] >= (x[0] + init_coeff[0]) * other_info[0] + (x[1] + init_coeff[1]) * other_info[1])
         index2 += 1
     z_count += 1
     #과거 정보를 적층하는 작업
@@ -307,7 +307,7 @@ def ReviseCoeff_MJByGurobi(init_coeff, now_data, past_data, error = 10, print_pa
                     pass
                 #m.addConstr(gp.quicksum((x[i] + init_coeff[i]) * p_other_info[i] for i in coeff) <= z[z_count] - error)
                 #m.addConstr(z[z_count] - error >= (x[0] + init_coeff[0]) * p_other_info[0] + (x[1] + init_coeff[1]) * p_other_info[1])
-                m.addConstr((x[0] + init_coeff[0]) * p_selected[0] + (x[1] + init_coeff[1]) * p_selected[1] - error >= (x[0] + init_coeff[0]) * p_other_info[0] + (x[1] + init_coeff[1]) *
+                m.addConstr((x[0] + init_coeff[0]) * p_selected[0] + (x[1] + init_coeff[1]) * p_selected[1] + error[z_count] >= (x[0] + init_coeff[0]) * p_other_info[0] + (x[1] + init_coeff[1]) *
                             p_other_info[1])
                 index2 += 1
             z_count += 1
@@ -379,7 +379,8 @@ class LP_search(object):
         if self.engine_type == 'Gurobi':
             feasiblity, res, model = ReviseCoeff_MJByGurobi(self.init, data, self.past_data, error = 0, print_para= False)
         else:
-            feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
+            #feasiblity,res = ReviseCoeff_MJByCplex(self.init, data, self.past_data, error=0, print_para=False)
+            pass
         if feasiblity == True:
             for index in range(len(res)):
                 self.init[index] += res[index]
@@ -516,13 +517,13 @@ for ITE_num in range(20):
     engine_reverse.xlim = [-1.5,1.5]
     engine_reverse.ylim = [-1.5,1.5]
     #init_vector = [round(random.random(),2),-round(random.random(),2)]
-    init_vector = [0.5,0.5]
+    init_vector = [0.5,0.5, 0.3]
     print('초기 값', init_vector)
     LP_engineByGurobi = LP_search(1, None, init_vector, engine_type='Gurobi')
-    LP_engineByCplex = LP_search(1, None, init_vector, engine_type='Cplex')
+    #LP_engineByCplex = LP_search(1, None, init_vector, engine_type='Cplex')
     LP_engineByGurobi.true_coeff = vector
-    LP_engineByCplex.true_coeff = vector
-    print('LPGurobi_engine 벡터 {} :: LPCplex_engine 벡터 {}'.format(LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
+    #LP_engineByCplex.true_coeff = vector
+    #print('LPGurobi_engine 벡터 {} :: LPCplex_engine 벡터 {}'.format(LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
     Orders = {}
     pool = list(numpy.arange(0, 10, 0.1))
     for t in range(ITE):
@@ -546,13 +547,14 @@ for ITE_num in range(20):
                 observation.append(ob)
         for ob in observation:
             print('대상 데이터 {}'.format(ob))
-            engine_forward.Updater(ob, Orders, Riders[0])
-            engine_reverse.Updater(ob, Orders, Riders[0])
-            #LP_engineByGurobi.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
+            #engine_forward.Updater(ob, Orders, Riders[0])
+            #engine_reverse.Updater(ob, Orders, Riders[0])
+            LP_engineByGurobi.LP_Solver(ob, Orders) # [선택한 주문 이름, [나머지 주문 이름]]
             #LP_engineByCplex.LP_Solver(ob, Orders)
             #Coeff_Check(Riders[0].coeff_vector, LP_engine.past_data)
-            print('확인용 계산: 라이더의 Coeff {} : 오라클(Gurobi)의 Coeff {} : 오라클(Cplex)의 Coeff {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
-            print('실제값 {} -> Gurobi 예측 값 {} : Cplex 예측 값 {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.init , LP_engineByCplex.init))
+            #print('확인용 계산: 라이더의 Coeff {} : 오라클(Gurobi)의 Coeff {} : 오라클(Cplex)의 Coeff {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.true_coeff, LP_engineByCplex.true_coeff))
+            #print('실제값 {} -> Gurobi 예측 값 {} : Cplex 예측 값 {}'.format(Riders[0].coeff_vector, LP_engineByGurobi.init , LP_engineByCplex.init))
+            print('실제값 {} -> Gurobi 예측 값 {} '.format(Riders[0].coeff_vector, LP_engineByGurobi.init))
         if engine_forward.ite % engine_forward.T == 0 and engine_forward.ite > 0:
             #engine_forward.NetUpdater()
             pass
@@ -562,7 +564,7 @@ for ITE_num in range(20):
         #GrahDraw(engine_forward, Riders[0])
         #GrahDraw(engine_reverse, Riders[0], info = 'backward')
         #input('LP_search 결과 {} : 실제 {}'.format(LP_engine.init, Riders[0].coeff_vector))
-        print('LP_Gurobi 결과 {} : LP_Cplex 결과 {} :실제 {}: 시작 값 {}'.format(LP_engineByGurobi.init,LP_engineByCplex.init, Riders[0].coeff_vector, init_vector))
+        #print('LP_Gurobi 결과 {} : LP_Cplex 결과 {} :실제 {}: 시작 값 {}'.format(LP_engineByGurobi.init,LP_engineByCplex.init, Riders[0].coeff_vector, init_vector))
         """
         if engine_reverse.ite % engine_reverse.T == 0 and engine_reverse.ite > 0:
             engine_reverse.NetUpdaterReverse()

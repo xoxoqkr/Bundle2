@@ -110,13 +110,13 @@ def WeightCalculator2(riders, rider_names, t_now, interval = 5, sample_size1 = 1
         #input('seq 확인 {} test {}'.format(seq, tuple(seq)))
         count[tuple(seq)] += 1
     valid_num = sum(count.values())
-    input('유효한 관찰수 {}'.format(valid_num))
+    print('유효한 관찰수 {}'.format(valid_num))
     for key in count:
         val = round(count[key]/valid_num,6)
         if val > 0:
             w[key] = val
     print_w = sorted(w.items(), key = lambda item: item[1], reverse = True)
-    input('확인 {}'.format(print_w))
+    print('확인 {}'.format(print_w))
     return w
 
 
@@ -503,7 +503,8 @@ def SelectByTwo_sided_way2(target_order, riders, orders, stores, platform, p2, t
 
 
 
-def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, bundle_permutation_option = False, uncertainty = False, platform_exp_error = 1, print_option = False):
+def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, speed = 1, bundle_permutation_option = False, uncertainty = False,
+                                     platform_exp_error = 1, print_option = True):
     """
     Construct s-size bundle pool based on the customer in orders.
     And select n bundle from the pool
@@ -519,61 +520,42 @@ def ConstructFeasibleBundle_TwoSided(target_order, orders, s, p2, thres = 0.05, 
     :parm bundle_search_variant: 번들 탐색시 대상이 되는 고객들 결정 (True : 기존에 번들의 고객들은 고려 X , False : 기존 번들의 고객도  고려)
     :return: constructed bundle set
     """
-
-    """
-    d1 = []
-    for order_name in orders:
-        d1.append(orders[order_name].name)
-    print('입력 고객 {}'.format(d1))
-    orders_name = []
-    d = []
-    for order_name in orders:
-        order = orders[order_name]
-        if order.time_info[1] == None and order.time_info[2] == None:
-            if order.type == 'single_order':
-                pass
-            else:
-                if bundle_search_variant == True:
-                    pass
-                else:
-                    continue
-            dist = distance(target_order.store_loc , order.store_loc) / speed
-        if target_order.name != order.name and dist <= order.p2:
-            d.append(order.name)
-    orders[target_order.name] = target_order    
-    """
     d = []
     for customer_name in orders:
         if customer_name != target_order.name:
             d.append(customer_name)
-    if print_option == True:
-        print('대상 고객 {} 고려 고객들 {} '.format(target_order.name, d))
     if len(d) > s - 1:
         M = itertools.permutations(d, s - 1)
         b = []
+        if print_option == True:
+            print('대상 고객 {} 고려 고객들 {}'.format(target_order.name, d))
         for m in M:
-            #print(list(m))
+            #print('대상 seq :: {}'.format(m))
             q = list(m) + [target_order.name]
             subset_orders = []
             time_thres = 0 #3개의 경로를 연속으로 가는 것 보다는
             for name in q:
                 subset_orders.append(orders[name])
                 time_thres += orders[name].distance/speed
-            #print('확인 1 {} : 확인2 {}'.format(subset_orders, time_thres))
+            #input('확인 1 {} : 확인2 {}'.format(subset_orders, time_thres))
             tem_route_info = BundleConsist(subset_orders, orders, p2, speed = speed, bundle_permutation_option= bundle_permutation_option, time_thres= time_thres, uncertainty = uncertainty, platform_exp_error = platform_exp_error, feasible_return = True)
+            #print('계산{} :: {}'.format(q, tem_route_info))
             if len(tem_route_info) > 0:
                 OD_pair_dist = MIN_OD_pair(orders, q, s)
                 for info in tem_route_info:
                     info.append((OD_pair_dist - info[5] / s))
             b += tem_route_info
-        #print('경우의 수 {} 가능 번들 수 {} : 정보 d {} s {}'.format(len(list(M)), len(b), d, s))
+        #input('가능 번들 수 {} : 정보 d {} s {}'.format(len(b), d, s))
         comparable_b = []
         if len(b) > 0:
             b.sort(key=operator.itemgetter(6))  # s_b 순으로 정렬  #target order를 포함하는 모든 번들에 대해서 s_b를 계산.
             b_star = b[0][6]
+            ave = []
             for ele in b:
+                ave.append(ele[6])
                 if (ele[6] - b_star)/b_star <= thres: #percent loss 가 thres 보다 작아야 함.
                     comparable_b.append(ele)
+            print('평균 {}'.format(sum(ave)/len(ave)))
         return comparable_b
     else:
         return []

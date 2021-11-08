@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 
 #from scipy.stats import poisson
+from A1_BasicFunc import RouteTime, distance, FLT_Calculate
 import operator
 import itertools
 import A1_Class
-from A1_BasicFunc import RouteTime, distance, FLT_Calculate
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -214,6 +214,7 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, bun
         for names in test_names:
             dist = distance(customers[names[0]].location, customers[names[1]].location)
             if dist > 15:
+                #print('거리에 의한 종료')
                 return []
         subset = []
         for store in store_subset:
@@ -235,9 +236,11 @@ def BundleConsist(orders, customers, p2, time_thres = 0, speed = 1,M = 1000, bun
                 sequence_feasiblity = False
                 break
         if sequence_feasiblity == True:
+            #input('feasilbe 통과1')
             ftd_feasiblity, ftds = FLT_Calculate(orders, customers, route, p2, [],M = M ,speed = speed, uncertainty =uncertainty, exp_error=platform_exp_error)
             #customer_in_order, customers, route, p2, except_names, M = 1000, speed = 1, now_t = 0
             if ftd_feasiblity == True:
+                #input('feasilbe 통과2')
                 route_time = RouteTime(orders, route, speed=speed, M=M, uncertainty = uncertainty, error = platform_exp_error)
                 feasible_routes.append([route, round(max(ftds), 2), round(sum(ftds) / len(ftds), 2), round(min(ftds), 2), order_names,round(route_time, 2)])
                 #print('시간 정보 번들 경로 시간 {} : 가능한 짧은 시간 {}'.format(route_time, time_thres))
@@ -727,6 +730,7 @@ def PlatformOrderRevise4(bundle_infos, customer_set, platform_set, now_t = 0, un
     #2번들 처리
     for info in bundle_infos:
         if len(info[4]) > 1:
+            print('번들 생성 {}'.format(info))
             o = GenBundleOrder(order_index, info, customer_set, now_t)
             o.old_info = info
             res[order_index] = o

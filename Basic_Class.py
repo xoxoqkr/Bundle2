@@ -169,8 +169,6 @@ class Rider(object):
         if len(ava_cts_class) > 0:
             #print('test2',ava_cts_class)
             priority_orders = PriorityOrdering(self, ava_cts_class, now_time = self.env.now, toCenter = toCenter, who = pref, save_info = save_info)
-            #print('rider', self.name,'//Now',round(self.env.now,2),'//un_ct',len(ava_cts),'//candidates', priority_orders[:min(3,len(priority_orders))],'//ava_cts:',ava_cts_names)
-            #input('Stop')
             for ct_info in priority_orders:
                 ct = customer_set[ct_info[0]]
                 print(self.name, 'selects', ct.name, 'at', self.env.now)
@@ -187,16 +185,10 @@ class Rider(object):
         :param wait_time:
         """
         while self.left == False:
-            #print('rider test', self.name, env.now, len(customer_set),self.veh.put_queue)
             if len(self.veh.put_queue) == 0 and self.wait == False:
                 #print('Rider', self.name, 'assign1 at', env.now)
                 ct_name, infos = self.CustomerSelector(customer_set, env.now, toCenter = toCenter, pref = pref, save_info = save_info)
                 if infos != None: #infos == None인 경우에는 고를 고객이 없다는 의미임.
-                    """
-                    rev_infos = []
-                    for info in infos:
-                        rev_infos.append([info[0],info[2]])
-                    """
                     if pref == 'test_rider' or pref == 'test_platform':
                         #self.choice_info.append([int(env.now), ct_name, self.last_location , rev_infos])
                         self.choice_info.append([int(env.now), ct_name, self.last_location, infos])

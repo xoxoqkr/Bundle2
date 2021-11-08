@@ -3,15 +3,14 @@ import csv
 
 import simpy
 import random
-
-from astropy import uncertainty
-
-from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave, SaveInstanceAsCSV
 from A1_Class import Store, Platform_pool
 from A2_Func import Platform_process, ResultPrint
+from A1_BasicFunc import Ordergenerator, RiderGenerator, ResultSave, SaveInstanceAsCSV
+
+
 import operator
 from Bundle_Run_ver0 import Platform_process3
-import matplotlib.pyplot as plt
+
 
 
 #Parameter define
@@ -36,7 +35,7 @@ rider_capacity = 1
 ITE_NUM = 5
 option_para = True #True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
 customer_max_range = 50
-store_max_range = 30
+store_max_range = 40
 divide_option = True # True : 구성된 번들에 속한 고객들을 다시 개별 고객으로 나눔. False: 번들로 구성된 고객들은 번들로만 구성
 p2_set = True
 p2 = 3 #p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
@@ -88,7 +87,7 @@ for ite in range(ITE_NUM):
     order_history = None
     store_history = []
     for _ in range(store_num):
-        store_history.append(list(random.sample(range(20 , store_max_range), 2)))
+        store_history.append(list(random.sample(range(10 , store_max_range), 2)))
     for sc in scenarios:
         if sc.name == 'A':
             score_type = 'oracle'
