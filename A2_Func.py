@@ -392,7 +392,7 @@ def CountUnpickedOrders(orders, now_t , interval = 10, return_type = 'class'):
     interval_orders = []
     for order_name in orders:
         order = orders[order_name]
-        if order.time_info[1] == None:
+        if order.time_info[1] == None and order.cancel == False:
             if return_type == 'class':
                 unpicked_orders.append(order)
             elif return_type == 'name':

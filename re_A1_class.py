@@ -37,7 +37,8 @@ class Order(object):
 
 class Rider(object):
     def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True,
-                 order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, platform_recommend = False, p_ij = [0.5,0.3,0.2]):
+                 order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, platform_recommend = False, p_ij = [0.5,0.3,0.2],
+                 bundle_construct = False):
         self.name = i
         self.env = env
         self.gen_time = int(env.now)
@@ -81,7 +82,8 @@ class Rider(object):
         self.check_t = 0.1
         self.empty_serach_count = 0
         self.p_j = p_ij
-        self.bundle_construct = False
+        self.bundle_construct = bundle_construct
+        self.order_select_time = []
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
         env.process(self.TaskSearch(env, platform, customers, p2=self.p2, order_select_type=order_select_type, uncertainty=uncertainty))
 
@@ -185,6 +187,7 @@ class Rider(object):
                 #order_info = self.OrderSelect(platform, customers, p2=p2, score_type=score_type,uncertainty=uncertainty)  # todo : 라이더의 선택 과정
                 order_info = self.OrderSelect2(platform, customers, p2=p2, uncertainty=uncertainty)
                 if order_info != None:
+                    platform.platform[order_info[0]].picked = True
                     self.OrderPick(order_info, order_info[1], customers, env.now,route_revise_option=score_type)  # 라우트 결정 후
                     self.last_pick_time = env.now
                     if order_info[8] == 'platform' and len(order_info[5]) > 0:
@@ -193,6 +196,7 @@ class Rider(object):
                     Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
                 next = numpy.random.poisson(self.search_lamda)
                 self.next_search_time += next
+                self.order_select_time.append(env.now)
                 yield env.timeout(next)
             else:
                 yield env.timeout(self.check_t)
@@ -208,7 +212,7 @@ class Rider(object):
                 dist = Basic.distance(self.last_departure_loc,task.route[0][2]) / self.speed  # 자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
                 if len(task.customers) > 1:
                     bundle_task_names.append([task.index, dist])
-            bound_order_names.append([task.index, dist])
+                bound_order_names.append([task.index, dist])
         bound_order_names.sort(key=operator.itemgetter(1))
         rv = random.random()
         page = 1
@@ -246,7 +250,9 @@ class Rider(object):
             if self.bundle_construct == True:
                 best_route_info = self.ShortestRoute(task, customers, p2=p2, uncertainty=uncertainty) #task가 산입될 수 있는 가장 좋은 경로
                 # best_route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
-                if len(route_info) > 0:
+                if len(best_route_info) > 0:
+                    if len(best_route_info) < 5:
+                        input('best_route_info {} '.format(best_route_info))
                     benefit = task.fee / best_route_info[5]  # 이익 / 운행 시간
                     scores.append([task.index] + best_route_info + [benefit] + ['rider'])
             #3가장 높은 점수 주문 선택
@@ -644,7 +650,8 @@ class Store(object):
             #print('T',int(env.now),"기다리는 중인 고객들",self.ready_order)
 
 class Customer(object):
-    def __init__(self, env, name, input_location, store = 0, store_loc = (25, 25),end_time = 60, ready_time=3, service_time=3, fee = 2500, p2 = 15, cooking_time = (2,5), cook_info = (None, None)):
+    def __init__(self, env, name, input_location, store = 0, store_loc = (25, 25),end_time = 60, ready_time=3, service_time=3,
+                 fee = 2500, p2 = 15, cooking_time = (2,5), cook_info = (None, None), platform = None):
         self.name = name  # 각 고객에게 unique한 이름을 부여할 수 있어야 함. dict의 key와 같이
         self.time_info = [round(env.now, 2), None, None, None, None, end_time, ready_time, service_time, None]
         # [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -670,7 +677,23 @@ class Customer(object):
         self.food_wait = None
         self.service_time = service_time
         self.priority_weight = 1
-        #self.sensitiveness = random.randrange()
+        self.cancel = False
+        env.process(self.CustomerLeave(env, platform))
+
+
+    def CustomerLeave(self, env, platform):
+        yield env.timeout(self.time_info[5])
+        if self.time_info[1] == None:
+            delete_list = []
+            for task_index in platform.platform:
+                if self.name in platform.platform[task_index].customers:
+                    delete_list.append(task_index)
+            for delete_index in delete_list:
+                del platform.platform[delete_index]
+            self.cancel = True
+        else:
+            pass
+
 
 class Platform_pool(object):
     def __init__(self):
@@ -680,7 +703,7 @@ class Platform_pool(object):
 
 
 class scenario(object):
-    def __init__(self, name, p1, search_option,  scoring_type = 'myopic',  unserved_bundle_order_break = True, bundle_selection_type = 'greedy', considered_customer_type = 'new'):
+    def __init__(self, name, p1 = True, search_option= False,  scoring_type = 'myopic',  unserved_bundle_order_break = True, bundle_selection_type = 'greedy', considered_customer_type = 'new'):
         self.name = name
         self.platform_work = p1
         self.res = []
@@ -692,6 +715,8 @@ class scenario(object):
         self.unserved_order_break = unserved_bundle_order_break# True면 기존에 있는 번들 고객도 고려, False면 번들에 없는 고객만 고려
         self.bundle_selection_type = bundle_selection_type
         self.considered_customer_type = considered_customer_type
+        self.platform_recommend = False
+        self.rider_bundle_construct = False
 
 def WaitTimeCal1(exp_store_arrive_t, assign_t, exp_cook_time, cook_time, move_t = 0):
     exp_food_ready_t = assign_t + exp_cook_time

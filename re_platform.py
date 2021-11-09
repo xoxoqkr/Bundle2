@@ -2,7 +2,7 @@
 import time
 import math
 from A2_Func import CountUnpickedOrders, CalculateRho, RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise4, GenBundleOrder
-from A3_two_sided import ParetoDominanceCount, BundleConsideredCustomers, SelectByTwo_sided_way2, Two_sidedScore, CountActiveRider,  WeightCalculator2,ConstructFeasibleBundle_TwoSided
+from A3_two_sided import BundleConsideredCustomers, CountActiveRider,  ConstructFeasibleBundle_TwoSided
 import operator
 from Bundle_selection_problem import Bundle_selection_problem3
 from Bundle_Run_ver0 import LamdaMuCalculate, NewCustomer
@@ -69,6 +69,7 @@ def Calculate_Phi(rider, customers, bundle_infos, l=4):
     dp_br = []
     dist_list = []
     displayed_values = []
+    gamma = 1 - numpy.exp(-rider.search_lamda)
     for customer_name in customers:
         customer = customers[customer_name]
         dist = distance(rider.last_departure_loc,customer.location)
@@ -86,7 +87,7 @@ def Calculate_Phi(rider, customers, bundle_infos, l=4):
                 tem_dp_br.append(rider.p_j[page_index])
             else:
                 tem_dp_br.append(0)
-        dp_br.append(1-sum(tem_dp_br))
+        dp_br.append(gamma*(1-sum(tem_dp_br)))
     return dp_br
 
 

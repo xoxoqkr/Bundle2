@@ -321,7 +321,7 @@ def NewCustomer(cusotmers, now_t, interval = 5):
     new_customer_names = []
     for customer_name in cusotmers:
         customer = cusotmers[customer_name]
-        if now_t - interval <= customer.time_info[0] and customer.time_info[1] == None:
+        if now_t - interval <= customer.time_info[0] and customer.time_info[1] == None and customer.cancel == False:
             new_customer_names.append(customer.name)
     return new_customer_names
 

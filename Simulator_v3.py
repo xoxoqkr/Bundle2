@@ -2,7 +2,8 @@
 import csv
 import time
 import simpy
-from A1_Class import Platform_pool, scenario
+from A1_Class import Platform_pool
+from re_A1_class import scenario
 from A1_BasicFunc import ResultSave, GenerateStoreByCSV, RiderGeneratorByCSV, OrdergeneratorByCSV
 from A2_Func import ResultPrint
 from re_platform import Platform_process5
@@ -54,25 +55,28 @@ v2 = [False]
 v3 = ['myopic', 'two_sided']
 #v4 = ['setcover','greedy']
 v4 = ['greedy']
-platform_recommend = True  #True ; False
+#platform_recommend = True  #True ; False
+#rider_bundle_construct = True
 order_select_type = 'simple' #oracle ; simple
 info = ['C', False, False, 'myopic', True]
 
-for i in v1:
-    for j in v2:
-        for k in v3:
-            for l in v4:
-                sc2 = scenario('C', True, True, scoring_type = k, considered_customer_type=i, unserved_bundle_order_break = j, bundle_selection_type = l)
-                scenarios.append(sc2)
+sc_index = 0
+for i in [True, False]:
+    for j in [True, False]:
+        sc = scenario('{}:P:{}/R:{}'.format(str(sc_index),i,j))
+        sc.platform_recommend = i
+        sc.rider_bundle_construct = j
+        scenarios.append(sc)
+        sc_index += 1
 
-scenarios = scenarios[:1]
+
+#scenarios = scenarios[:1]
 
 #input('확인 {}'.format(len(scenarios)))
-for ite in range(0, 5):
+for ite in range(0, 1):
     # instance generate
     for sc in scenarios:
-        print('시나리오 정보 {} : {} : {} : {}'.format(sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type,
-                                         sc.bundle_selection_type))
+        print('시나리오 정보 {} : {} : {} : {}'.format(sc.platform_recommend,sc.rider_bundle_construct,sc.scoring_type,sc.bundle_selection_type))
         sc.store_dir = 'Instance_random_store/Instancestore_infos'+str(ite) #Instance_random_store/Instancestore_infos
         sc.customer_dir = 'Instance_random_store/Instancecustomer_infos'+str(ite) #Instance_random_store/Instancecustomer_infos
         sc.rider_dir = 'Instance_random_store/Instancerider_infos'+str(ite) #Instance_random_store/Instancerider_infos
@@ -83,9 +87,10 @@ for ite in range(0, 5):
         # run
         env = simpy.Environment()
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
-        env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity, platform_recommend = platform_recommend, input_order_select_type = order_select_type))
-        env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict))
-        env.process(Platform_process5(env, Platform2, Orders, Rider_dict, p2,thres_p,interval, bundle_para= platform_recommend))
+        env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity,
+                                        platform_recommend = sc.platform_recommend, input_order_select_type = order_select_type, bundle_construct= sc.rider_bundle_construct))
+        env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict, Platform2))
+        env.process(Platform_process5(env, Platform2, Orders, Rider_dict, p2,thres_p,interval, bundle_para= sc.platform_recommend))
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed, riders = Rider_dict)
         sc.res.append(res)
@@ -162,8 +167,8 @@ for sc in scenarios:
     for res_info in sc.res:
         try:
             print(
-                '시나리오 ;{}; 정보;{};{};{};{}; ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};'.format(
-                    sc.name, sc.considered_customer_type,sc.unserved_order_break,sc.scoring_type,  sc.bundle_selection_type,  count, res_info[0],
+                'SC:{}/플랫폼번들{}/라이더번들{}/ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};'.format(
+                    sc.name, sc.platform_recommend,sc.rider_bundle_construct, count, res_info[0],
                     res_info[1], res_info[2], res_info[3], res_info[4], res_info[5], res_info[6], res_info[7], res_info[8]))
         except:
             print('시나리오 {} ITE {} 결과 없음'.format(sc.name, count))

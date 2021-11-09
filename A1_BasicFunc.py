@@ -158,7 +158,8 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
         rider_num += 1
 
 
-def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None, input_capacity = None, platform_recommend = False, input_order_select_type = None):
+def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None,
+                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -198,7 +199,8 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
         #                              uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend)
         single_rider = re_A1_class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
                                    capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
-                                      uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend)
+                                      uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend,
+                                         bundle_construct= bundle_construct)
         single_rider.exp_wage = exp_WagePerHr
         Rider_dict[name] = single_rider
         interval = data[interval_index]
@@ -298,7 +300,7 @@ def ReadCSV(csv_dir, interval_index = None):
         datas[-1].append(0)
     return datas
 
-def OrdergeneratorByCSV(env, csv_dir, orders, stores):
+def OrdergeneratorByCSV(env, csv_dir, orders, stores, platform = None):
     """
     Generate customer order
     :param env: Simpy Env
@@ -322,8 +324,10 @@ def OrdergeneratorByCSV(env, csv_dir, orders, stores):
         cook_time = data[8]
         cook_time_type = data[9]
         cooking_time = [data[10], data[11]]
-        order = A1_Class.Customer(env, name, input_location, store=store_num, store_loc=store_loc, p2=p2,
-                               cooking_time=cook_time, cook_info=[cook_time_type, cooking_time])
+        #order = A1_Class.Customer(env, name, input_location, store=store_num, store_loc=store_loc, p2=p2,
+        #                       cooking_time=cook_time, cook_info=[cook_time_type, cooking_time])
+        order = re_A1_class.Customer(env, name, input_location, store=store_num, store_loc=store_loc, p2=p2,
+                               cooking_time=cook_time, cook_info=[cook_time_type, cooking_time], platform = platform)
         orders[name] = order
         stores[store_num].received_orders.append(orders[name])
         interval = data[interval_index]
@@ -477,7 +481,7 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
         #print('평균 주문간격{}'.format(decision_moment))
         info = [rider_name, len(rider.served), rider.idle_time, rider.b_select,rider.num_bundle_customer, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,decision_moment,rider.visited_route]
         rider_infos.append(info)
-    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 출발 시점','고객 도착 시점','가게 도착 시점','음식조리시간','음식 음식점 대기 시간','라이더 가게 대기시간1','라이더 가게 대기시간2','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간','번들로 구성된 시점']
+    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 출발 시점','고객 도착 시점','가게 도착 시점','음식조리시간','음식 음식점 대기 시간','라이더 가게 대기시간1','라이더 가게 대기시간2','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간','번들로 구성된 시점', '취소','LT', 'FLT']
     customer_infos = [sub, customer_header]
     for customer_name in Customers:
         customer = Customers[customer_name]
@@ -487,6 +491,13 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
         except:
             pass
         info = [customer_name] + customer.time_info[:4] +[customer.time_info[8]]+[customer.cook_time]+ [customer.food_wait, customer.rider_wait]+[wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait,customer.in_bundle_time]
+        info += [customer.cancel]
+        if customer.time_info[3] != None:
+            info += [customer.time_info[3] - customer.time_info[0], customer.time_info[3] - customer.time_info[2]]
+        #elif customer.time_info[2] != None:
+        #    info += [None, customer.time_info[3] - customer.time_info[2]]
+        else:
+            info += [None, None]
         customer_infos.append(info)
     f = open(title + "riders.txt", 'a')
     for info in rider_infos:
