@@ -9,9 +9,9 @@ from A2_Func import ResultPrint
 from re_platform import Platform_process5
 
 # Parameter define
-order_interval = 2
+order_interval = 1
 interval = 5
-run_time = 400
+run_time = 200
 cool_time = 30  # run_time - cool_time 시점까지만 고객 생성
 uncertainty_para = True  # 음식 주문 불확실성 고려
 rider_exp_error = 1.5  # 라이더가 가지는 불확실성
@@ -23,7 +23,7 @@ thres_p = 0
 rider_working_time = 120
 # env = simpy.Environment()
 store_num = 20
-rider_num = 5
+rider_num = 8
 rider_gen_interval = 2  # 라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 2
@@ -70,16 +70,16 @@ for i in [True, False]:
         sc_index += 1
 
 
-#scenarios = scenarios[:1]
+#scenarios = [scenarios[2]]
 
 #input('확인 {}'.format(len(scenarios)))
-for ite in range(0, 1):
+for ite in range(0, 5):
     # instance generate
     for sc in scenarios:
         print('시나리오 정보 {} : {} : {} : {}'.format(sc.platform_recommend,sc.rider_bundle_construct,sc.scoring_type,sc.bundle_selection_type))
         sc.store_dir = 'Instance_random_store/Instancestore_infos'+str(ite) #Instance_random_store/Instancestore_infos
         sc.customer_dir = 'Instance_random_store/Instancecustomer_infos'+str(ite) #Instance_random_store/Instancecustomer_infos
-        sc.rider_dir = 'Instance_random_store/Instancerider_infos'+str(ite) #Instance_random_store/Instancerider_infos
+        sc.rider_dir = 'Instance_random_store/Instancerider_infos0' #+str(ite) #Instance_random_store/Instancerider_infos
         Rider_dict = {}
         Orders = {}
         Platform2 = Platform_pool()
@@ -88,7 +88,8 @@ for ite in range(0, 1):
         env = simpy.Environment()
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
         env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity,
-                                        platform_recommend = sc.platform_recommend, input_order_select_type = order_select_type, bundle_construct= sc.rider_bundle_construct))
+                                        platform_recommend = sc.platform_recommend, input_order_select_type = order_select_type, bundle_construct= sc.rider_bundle_construct,
+                                        rider_num = rider_num))
         env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict, Platform2))
         env.process(Platform_process5(env, Platform2, Orders, Rider_dict, p2,thres_p,interval, bundle_para= sc.platform_recommend))
         env.run(run_time)

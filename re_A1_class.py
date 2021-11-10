@@ -70,7 +70,7 @@ class Rider(object):
         self.onhand_order_indexs = []
         self.decision_moment = []
         self.exp_error = exp_error
-        self.search_lamda = random.randint(4,7)
+        self.search_lamda = 5 #random.randint(4,7)
         self.exp_wage = 0
         self.freedom = freedom
         self.order_select_type = order_select_type
@@ -134,6 +134,10 @@ class Rider(object):
                             exp_cook_time = order.rider_exp_cook_time
                         else:  # 'bundle'
                             exp_cook_time = order.platform_exp_cook_time
+                        if exp_cook_time == None:
+                            print(order.leave)
+                            print(order.time_info)
+                            input('멈춤')
                         wait_at_store, food_wait, manual_cook_time = WaitTimeCal1(exp_store_arrive, order.time_info[1], exp_cook_time, order.cook_time,move_t = move_t)
                         self.store_wait += wait_at_store
                         order.rider_wait = wait_at_store
@@ -170,9 +174,25 @@ class Rider(object):
                                     break
                             if done == True:
                                 self.picked_orders.remove(order_info)
+                        if self.visited_route[-1][0] != node_info[0]: #이전 노드가 아니라는 뜻
+                            #print(self.visited_route[-1][:2], node_info[:2])
+                            #print(node_info)
+                            #print(self.visited_route)
+                            #input('확인')
+                            check_indexs = list(range(len(self.visited_route)))
+                            check_indexs.reverse()
+                            for index in check_indexs:
+                                if self.visited_route[index][0] == node_info[0] and self.visited_route[index][1] == 0:
+                                    order.rider_bundle = [True, env.now - self.visited_route[index][3]]
+                                    break
+                            if order.rider_bundle == [None, None]:
+                                print(node_info)
+                                print(self.visited_route)
+                                input('에러 발생')
                     self.last_departure_loc = self.route[0][2]
                     self.visited_route.append(self.route[0])
                     self.visited_route[-1][3] = int(env.now)
+                    #input('방문 경로 확인 {}'.format(self.visited_route))
                     del self.route[0]
                     print('남은 경로 {}'.format(self.route))
             else:
@@ -216,9 +236,12 @@ class Rider(object):
         bound_order_names.sort(key=operator.itemgetter(1))
         rv = random.random()
         page = 1
-        for pr in self.p_j:
-            if rv > pr:
-                page = self.p_j.index(pr)
+        pages = list(range(len(self.p_j)))
+        for index in pages:
+            #print('index {} sum{}'.format(index,sum(self.p_j[:index+1])))
+            if rv < sum(self.p_j[:index+1]):
+                page = self.p_j.index(self.p_j[index]) + 1
+                #input('rv{}, index {} pages {} page {} sum{}'.format(rv, index,self.p_j, page,sum(self.p_j[:index+1]) ))
                 break
         considered_tasks = bound_order_names[:page*l]
         #input(considered_tasks)
@@ -251,6 +274,7 @@ class Rider(object):
                 best_route_info = self.ShortestRoute(task, customers, p2=p2, uncertainty=uncertainty) #task가 산입될 수 있는 가장 좋은 경로
                 # best_route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
                 if len(best_route_info) > 0:
+
                     if len(best_route_info) < 5:
                         input('best_route_info {} '.format(best_route_info))
                     benefit = task.fee / best_route_info[5]  # 이익 / 운행 시간
@@ -673,11 +697,12 @@ class Customer(object):
         self.cook_info = cook_info
         self.exp_info = [None,None,None]
         self.rider_exp_cook_time = None
-        self.platform_exp_cook_time = None
+        self.platform_exp_cook_time = 1
         self.food_wait = None
         self.service_time = service_time
         self.priority_weight = 1
         self.cancel = False
+        self.rider_bundle = [None, None]
         env.process(self.CustomerLeave(env, platform))
 
 

@@ -4,7 +4,7 @@ import math
 from A2_Func import CountUnpickedOrders, CalculateRho, RequiredBreakBundleNum, BreakBundle, PlatformOrderRevise4, GenBundleOrder
 from A3_two_sided import BundleConsideredCustomers, CountActiveRider,  ConstructFeasibleBundle_TwoSided
 import operator
-from Bundle_selection_problem import Bundle_selection_problem3
+from Bundle_selection_problem import Bundle_selection_problem3, Bundle_selection_problem4
 from Bundle_Run_ver0 import LamdaMuCalculate, NewCustomer
 import numpy
 
@@ -20,19 +20,23 @@ def distance(p1, p2):
     return round(euc_dist,4)
 
 
-def Platform_process5(env, platform, orders, riders, p2,thres_p,interval, end_t = 1000,divide_option = False,unserved_bundle_order_break = True, bundle_para = False):
+def Platform_process5(env, platform, orders, riders, p2,thres_p,interval, end_t = 1000,
+                      divide_option = False,unserved_bundle_order_break = True, bundle_para = False,
+                      delete_para = True):
     yield env.timeout(5) #warm-up time
     while env.now <= end_t:
         if bundle_para == True:
             lamda1, lamda2, mu1, mu2 = LamdaMuCalculate(orders, riders, env.now, interval=interval, return_type='class')
             p = CalculateRho(lamda1, lamda2, mu1, mu2)
             if p > thres_p:
-                feasible_bundle_set, phi_b, d_matrix, s_b = Bundle_Ready_Processs(env.now, platform, orders, riders, p2, interval, speed = riders[0].speed, bundle_permutation_option= True)
+                feasible_bundle_set, phi_b, d_matrix, s_b, D = Bundle_Ready_Processs(env.now, platform, orders, riders, p2, interval, speed = riders[0].speed, bundle_permutation_option= True)
                 print('phi_b {}:{} d_matrix {}:{} s_b {}:{}'.format(len(phi_b), numpy.average(phi_b),
                                                                     d_matrix.shape, numpy.average(d_matrix),len(s_b),numpy.average(s_b),))
                 print('d_matrix : {}'.format(d_matrix))
                 #문제 풀이
                 unique_bundle_indexs = Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr = 0.05)
+                #unique_bundle_indexs = Bundle_selection_problem4(phi_b, D, s_b, min_pr = 0.05, w = 1)
+                #input('결과 확인')
                 unique_bundles = []
                 for index in unique_bundle_indexs:
                     unique_bundles.append(feasible_bundle_set[index])
@@ -61,6 +65,13 @@ def Platform_process5(env, platform, orders, riders, p2,thres_p,interval, end_t 
                 org_bundle_num, rev_bundle_num = RequiredBreakBundleNum(platform, lamda2, mu1, mu2, thres=thres_p)
                 Break_the_bundle(platform, orders, org_bundle_num, rev_bundle_num)
         yield env.timeout(interval)
+        if bundle_para == True and delete_para == True:
+            delete_task_names = []
+            for task_name in platform.platform:
+                if len(platform.platform[task_name].customers) > 1 and platform.platform[task_name].picked == False:
+                    delete_task_names.append(task_name)
+            for task_name in delete_task_names:
+                del platform.platform[task_name]
         print('Simulation Time : {}'.format(env.now))
 
 
@@ -152,8 +163,18 @@ def Bundle_Ready_Processs(now_t, platform_set, orders, riders, p2,interval, bund
     s_b = []
     for info in Feasible_bundle_set:
         s_b.append(info[6])
-    #문제 풀이
-    return Feasible_bundle_set, phi_b, d_matrix, s_b
+    #4 D 계산
+    D = []
+    #info1 : [route, round(max(ftds), 2), round(sum(ftds) / len(ftds), 2), round(min(ftds), 2), order_names, round(route_time, 2)]
+    info1_index = 0
+    info2_index = 0
+    for info1 in Feasible_bundle_set:
+        for info2 in Feasible_bundle_set:
+            if info1_index > info2_index and len(info1[4]) + len(info2[4]) > len(list(set(info1[4] + info2[4]))):
+                D.append([Feasible_bundle_set.index(info1), Feasible_bundle_set.index(info2)])
+            info2_index += 1
+        info1_index += 1
+    return Feasible_bundle_set, phi_b, d_matrix, s_b, D
 
 
 def Break_the_bundle(platform, orders, org_bundle_num, rev_bundle_num):

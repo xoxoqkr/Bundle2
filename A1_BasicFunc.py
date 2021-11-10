@@ -159,7 +159,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None,
-                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False):
+                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False, rider_num = 5):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -208,7 +208,8 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
             yield env.timeout(interval)
         else:
             print('현재 T :{} / 마지막 고객 {} 생성'.format(int(env.now), name))
-
+        if name >= rider_num :
+            break
 
 
 def GenerateStoreByCSV(env, csv_dir, platform,Store_dict):
@@ -481,7 +482,9 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
         #print('평균 주문간격{}'.format(decision_moment))
         info = [rider_name, len(rider.served), rider.idle_time, rider.b_select,rider.num_bundle_customer, int(rider.income), round(rider.store_wait,2) ,bundle_store_wait,single_store_wait,decision_moment,rider.visited_route]
         rider_infos.append(info)
-    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 출발 시점','고객 도착 시점','가게 도착 시점','음식조리시간','음식 음식점 대기 시간','라이더 가게 대기시간1','라이더 가게 대기시간2','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간','번들로 구성된 시점', '취소','LT', 'FLT']
+    customer_header = ['고객 이름', '생성 시점', '라이더 선택 시점','가게 출발 시점','고객 도착 시점','가게 도착 시점','음식조리시간','음식 음식점 대기 시간'
+        ,'라이더 가게 대기시간1','라이더 가게 대기시간2','수수료', '수행 라이더 정보', '직선 거리','p2(민감정도)','번들여부','조리시간','기사 대기 시간'
+        ,'번들로 구성된 시점', '취소','LT', 'FLT', '라이더 번들 여부','라이더 번들 LT']
     customer_infos = [sub, customer_header]
     for customer_name in Customers:
         customer = Customers[customer_name]
@@ -498,6 +501,7 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
         #    info += [None, customer.time_info[3] - customer.time_info[2]]
         else:
             info += [None, None]
+        info += customer.rider_bundle
         customer_infos.append(info)
     f = open(title + "riders.txt", 'a')
     for info in rider_infos:

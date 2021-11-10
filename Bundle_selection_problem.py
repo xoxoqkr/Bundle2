@@ -98,12 +98,49 @@ def Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr):
     m = gp.Model("mip1")
     x = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="x")
     z = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="z")
-
+    try:
+        w = sum(s_b) / len(s_b)
+    except:
+        w = 1
     #Set objective function
-    m.setObjective(gp.quicksum(s_b[i]*x[i] - z[i] for i in bundle_indexs) , GRB.MAXIMIZE)
+    m.setObjective(gp.quicksum(s_b[i]*x[i] - w*z[i] for i in bundle_indexs) , GRB.MAXIMIZE)
 
     for i in bundle_indexs:
         m.addConstr(x[i] * gp.quicksum(x[j]*d_matrix[i][j]  for j in bundle_indexs) == 0)
+
+    m.addConstrs(x[i] * phi_b[i] - z[i] <= min_pr for i in bundle_indexs)
+    #풀이
+    m.optimize()
+    try:
+        print('Obj val: %g' % m.objVal)
+        res = []
+        count = 0
+        for val in m.getVars():
+            if val.VarName[0] == 'x' and float(val.x) == 1.0:
+                res.append(count)
+            count += 1
+        return res
+    except:
+        print('Infeasible')
+        return []
+
+
+def Bundle_selection_problem4(phi_b, D, s_b, min_pr, w = None):
+    bundle_indexs = list(range(len(s_b)))
+    if w == None:
+        try:
+            w = sum(s_b)/len(s_b)
+        except:
+            w = 1
+    m = gp.Model("mip1")
+    x = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="x")
+    z = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="z")
+
+    #Set objective function
+    m.setObjective(gp.quicksum(s_b[i]*x[i] - w*z[i] for i in bundle_indexs) , GRB.MAXIMIZE)
+
+    for info in D:
+        m.addConstr(x[info[0]] + x[info[1]] <= 1)
 
     m.addConstrs(x[i] * phi_b[i] - z[i] <= min_pr for i in bundle_indexs)
     #풀이
