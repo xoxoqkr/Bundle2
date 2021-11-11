@@ -38,7 +38,7 @@ class Order(object):
 class Rider(object):
     def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True,
                  order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, platform_recommend = False, p_ij = [0.5,0.3,0.2],
-                 bundle_construct = False):
+                 bundle_construct = False, lamda = 5):
         self.name = i
         self.env = env
         self.gen_time = int(env.now)
@@ -70,7 +70,7 @@ class Rider(object):
         self.onhand_order_indexs = []
         self.decision_moment = []
         self.exp_error = exp_error
-        self.search_lamda = 5 #random.randint(4,7)
+        self.search_lamda = lamda # random.randint(4,7)
         self.exp_wage = 0
         self.freedom = freedom
         self.order_select_type = order_select_type
@@ -203,7 +203,7 @@ class Rider(object):
 
     def TaskSearch(self, env, platform, customers, p2=0, order_select_type='simple', uncertainty=False, score_type = 'simple'):
         while int(env.now) < self.end_t:
-            if len(self.route)  == 0 or env.now >= self.next_search_time:
+            if len(self.route)  == 0 or env.now >= self.next_search_time:# or len(self.onhand) <= self.max_order_num:
                 #order_info = self.OrderSelect(platform, customers, p2=p2, score_type=score_type,uncertainty=uncertainty)  # todo : 라이더의 선택 과정
                 order_info = self.OrderSelect2(platform, customers, p2=p2, uncertainty=uncertainty)
                 if order_info != None:
@@ -214,6 +214,12 @@ class Rider(object):
                         self.b_select += 1
                         self.num_bundle_customer += len(order_info[5])
                     Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
+                """
+                if self.bundle_construct == True:
+                    next = self.check_t
+                else:
+                    next = numpy.random.poisson(self.search_lamda)                
+                """
                 next = numpy.random.poisson(self.search_lamda)
                 self.next_search_time += next
                 self.order_select_time.append(env.now)

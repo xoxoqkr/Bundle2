@@ -2,6 +2,7 @@
 import csv
 import time
 import simpy
+import random
 from A1_Class import Platform_pool
 from re_A1_class import scenario
 from A1_BasicFunc import ResultSave, GenerateStoreByCSV, RiderGeneratorByCSV, OrdergeneratorByCSV
@@ -26,7 +27,7 @@ store_num = 20
 rider_num = 8
 rider_gen_interval = 2  # 라이더 생성 간격.
 rider_speed = 3
-rider_capacity = 2
+rider_capacity = 3
 start_ite = 0
 ITE_NUM = 1
 option_para = True  # True : 가게와 고객을 따로 -> 시간 단축 가능 :: False : 가게와 고객을 같이 -> 시간 증가
@@ -34,31 +35,19 @@ customer_max_range = 50
 store_max_range = 30
 divide_option = True  # True : 구성된 번들에 속한 고객들을 다시 개별 고객으로 나눔. False: 번들로 구성된 고객들은 번들로만 구성
 p2_set = True
-p2 = 3  # p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
+search_range = 2  # p2_set이 False인 경우에는 p2만큼의 시간이 p2로 고정됨. #p2_set이 True인 경우에는 p2*dis(가게,고객)/speed 만큼이 p2시간으로 설정됨.
 # order_p2 = [[1.5,2,3],[0.3,0.3,0.4]] #음식 별로 민감도가 차이남.
-order_p2 = 3
 wait_para = False  # True: 음식조리로 인한 대기시간 발생 #False : 음식 대기로 인한 대기시간 발생X
 scenarios = []
 run_para = True  # True : 시뮬레이션 작동 #False 데이터 저장용
-
+pr_rev = 2
 f = open("결과저장0706.txt", 'a')
 f.write('결과저장 시작' + '\n')
 f.close()
 
 
-infos = [['C',True, False, 'myopic', True]]
-#v1 = ['new', 'all']
-#v1 = ['all']
-v1 = ['new']
-#v2 = [True, False]
-v2 = [False]
-v3 = ['myopic', 'two_sided']
-#v4 = ['setcover','greedy']
-v4 = ['greedy']
-#platform_recommend = True  #True ; False
-#rider_bundle_construct = True
+
 order_select_type = 'simple' #oracle ; simple
-info = ['C', False, False, 'myopic', True]
 
 sc_index = 0
 for i in [True, False]:
@@ -71,10 +60,13 @@ for i in [True, False]:
 
 
 #scenarios = [scenarios[2]]
-
+exp_range = [0]*20
 #input('확인 {}'.format(len(scenarios)))
-for ite in range(0, 5):
+for ite in exp_range:#range(0, 1):
     # instance generate
+    lamda_list = []
+    for rider_name in range(100):
+        lamda_list.append(random.randint(4,7))
     for sc in scenarios:
         print('시나리오 정보 {} : {} : {} : {}'.format(sc.platform_recommend,sc.rider_bundle_construct,sc.scoring_type,sc.bundle_selection_type))
         sc.store_dir = 'Instance_random_store/Instancestore_infos'+str(ite) #Instance_random_store/Instancestore_infos
@@ -89,9 +81,9 @@ for ite in range(0, 5):
         GenerateStoreByCSV(env, sc.store_dir, Platform2, Store_dict)
         env.process(RiderGeneratorByCSV(env, sc.rider_dir,  Rider_dict, Platform2, Store_dict, Orders, input_speed = rider_speed, input_capacity= rider_capacity,
                                         platform_recommend = sc.platform_recommend, input_order_select_type = order_select_type, bundle_construct= sc.rider_bundle_construct,
-                                        rider_num = rider_num))
-        env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict, Platform2))
-        env.process(Platform_process5(env, Platform2, Orders, Rider_dict, p2,thres_p,interval, bundle_para= sc.platform_recommend))
+                                        rider_num = rider_num, lamda_list=lamda_list))
+        env.process(OrdergeneratorByCSV(env, sc.customer_dir, Orders, Store_dict, Platform2, p2_ratio = pr_rev,rider_speed= rider_speed))
+        env.process(Platform_process5(env, Platform2, Orders, Rider_dict, search_range,thres_p,interval, bundle_para= sc.platform_recommend))
         env.run(run_time)
         res = ResultPrint(sc.name + str(ite), Orders, speed=rider_speed, riders = Rider_dict)
         sc.res.append(res)
@@ -141,12 +133,13 @@ for ite in range(0, 5):
         res_info = sc.res[-1]
         info = str(sc.name) + ';' + str(ite) + ';' + str(res_info[0]) + ';' + str(res_info[1]) + ';' + str(
             res_info[2]) + ';' + str(res_info[3]) + ';' + str(res_info[4]) + ';' + str(
-            round(res_info[5], 4)) + ';' + str(ave_wait_time) + ';' + str(b_select) + '\n'
+            round(res_info[5], 4)) + ';' + str(ave_wait_time) + ';' + str(b_select) + ';'+ str(res_info[9]) +'\n'
+
         f = open("결과저장0706.txt", 'a')
         f.write(info)
         f.close()
         # input('파일 확인')
-        sub_info = 'divide_option : {}, p2: {}, divide_option: {}, unserved_order_break : {}'.format(divide_option, p2,
+        sub_info = 'divide_option : {}, p2: {}, divide_option: {}, unserved_order_break : {}'.format(divide_option, search_range,
                                                                                                      sc.platform_work,
                                                                                                      sc.unserved_order_break)
         ResultSave(Rider_dict, Orders, title='Test', sub_info=sub_info, type_name=sc.name)
@@ -168,9 +161,29 @@ for sc in scenarios:
     for res_info in sc.res:
         try:
             print(
-                'SC:{}/플랫폼번들{}/라이더번들{}/ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};'.format(
+                'SC:{}/플랫폼번들{}/라이더번들{}/ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;'
+                '{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};OD증가수;{};OD증가 분산;{};OD평균;{}'.format(
                     sc.name, sc.platform_recommend,sc.rider_bundle_construct, count, res_info[0],
-                    res_info[1], res_info[2], res_info[3], res_info[4], res_info[5], res_info[6], res_info[7], res_info[8]))
+                    res_info[1], res_info[2], res_info[3], res_info[4], res_info[5], res_info[6], res_info[7], res_info[8],res_info[9],res_info[10],res_info[11]))
         except:
             print('시나리오 {} ITE {} 결과 없음'.format(sc.name, count))
         count += 1
+print("요약 정리")
+for sc in scenarios:
+    res_info = []
+    for index in list(range(len(sc.res[0]))):
+        tem = []
+        for info in sc.res:
+            tem.append(info[index])
+        res_info.append(sum(tem)/len(tem))
+    try:
+        content = 'SC:{}/플랫폼번들{}/라이더번들{}/ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};OD증가수;{};OD증가 분산;{};OD평균;{}'.format(
+                sc.name, sc.platform_recommend,sc.rider_bundle_construct, '요약 정리', res_info[0],
+                res_info[1], res_info[2], res_info[3], res_info[4], res_info[5], res_info[6], res_info[7], res_info[8],res_info[9],res_info[10],res_info[11])
+        print(
+            'SC:{}/플랫폼번들{}/라이더번들{}/ITE ;{}; /전체 고객 ;{}; 중 서비스 고객 ;{};/ 서비스율 ;{};/ 평균 LT ;{};/ 평균 FLT ;{};/직선거리 대비 증가분 ;'
+            '{};원래 O-D길이;{};라이더 수익 분산;{};LT분산;{};OD증가수;{};OD증가 분산;{};OD평균;{}'.format(
+                sc.name, sc.platform_recommend,sc.rider_bundle_construct, '요약 정리', res_info[0],
+                res_info[1], res_info[2], res_info[3], res_info[4], res_info[5], res_info[6], res_info[7], res_info[8],res_info[9],res_info[10],res_info[11]))
+    except:
+        print('시나리오 {} ITE {} 결과 없음'.format(sc.name, count))

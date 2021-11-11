@@ -98,11 +98,13 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
         if order_name not in except_names:
             #rev_p2 = p2
             rev_p2 = customers[order_name].p2
+            #input('p2 확인 1 :: {}'.format(rev_p2))
             if customers[order_name].time_info[2] != None:
                 #print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
                 last_time = now_t - customers[order_name].time_info[2] #이미 음식이 실린 후 지난 시간
                 #rev_p2 = p2 - last_time
                 rev_p2 = customers[order_name].min_FLT - last_time
+                #input('p2 확인 2 :: {}'.format(rev_p2))
             try:
                 s = route.index(order_name + M)
                 e = route.index(order_name)
@@ -159,7 +161,7 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None,
-                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False, rider_num = 5):
+                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False, rider_num = 5, lamda_list = None):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -194,13 +196,17 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
         wait_para = data[7]
         uncertainty = data[8]
         exp_error = data[9]
+        if lamda_list == None:
+            lamda = 5
+        else:
+            lamda = lamda_list[name]
         #single_rider = A1_Class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
         #                           capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
         #                              uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend)
         single_rider = re_A1_class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
                                    capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
                                       uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend,
-                                         bundle_construct= bundle_construct)
+                                         bundle_construct= bundle_construct, lamda= lamda)
         single_rider.exp_wage = exp_WagePerHr
         Rider_dict[name] = single_rider
         interval = data[interval_index]
@@ -301,7 +307,7 @@ def ReadCSV(csv_dir, interval_index = None):
         datas[-1].append(0)
     return datas
 
-def OrdergeneratorByCSV(env, csv_dir, orders, stores, platform = None):
+def OrdergeneratorByCSV(env, csv_dir, orders, stores, platform = None, p2_ratio = None, rider_speed = 1):
     """
     Generate customer order
     :param env: Simpy Env
@@ -321,7 +327,11 @@ def OrdergeneratorByCSV(env, csv_dir, orders, stores, platform = None):
         input_location = [data[2],data[3]]
         store_num = data[4]
         store_loc = [data[5], data[6]]
-        p2 = data[7]
+        if p2_ratio == None:
+            p2 = data[7]
+        else:
+            p2 = (data[7]/rider_speed)*p2_ratio
+        #input('거리 {} / 생성 p2 {}/ 라이더 스피드{} / p2% {}'.format(distance(input_location, store_loc),p2, rider_speed, p2_ratio))
         cook_time = data[8]
         cook_time_type = data[9]
         cooking_time = [data[10], data[11]]
