@@ -7,7 +7,7 @@ import operator
 from Bundle_selection_problem import Bundle_selection_problem3, Bundle_selection_problem4
 from Bundle_Run_ver0 import LamdaMuCalculate, NewCustomer
 import numpy
-
+import matplotlib.pyplot as plt
 
 def distance(p1, p2):
     """
@@ -22,20 +22,20 @@ def distance(p1, p2):
 
 def Platform_process5(env, platform, orders, riders, p2,thres_p,interval, end_t = 1000,
                       divide_option = False,unserved_bundle_order_break = True, bundle_para = False,
-                      delete_para = True):
+                      delete_para = True, obj_type = 'simple_max_s'):
     yield env.timeout(5) #warm-up time
     while env.now <= end_t:
         if bundle_para == True:
             lamda1, lamda2, mu1, mu2 = LamdaMuCalculate(orders, riders, env.now, interval=interval, return_type='class')
             p = CalculateRho(lamda1, lamda2, mu1, mu2)
             if p > thres_p:
-                feasible_bundle_set, phi_b, d_matrix, s_b, D = Bundle_Ready_Processs(env.now, platform, orders, riders, p2, interval, speed = riders[0].speed, bundle_permutation_option= True)
+                feasible_bundle_set, phi_b, d_matrix, s_b, D, lt_matrix = Bundle_Ready_Processs(env.now, platform, orders, riders, p2, interval, speed = riders[0].speed, bundle_permutation_option= True)
                 print('phi_b {}:{} d_matrix {}:{} s_b {}:{}'.format(len(phi_b), numpy.average(phi_b),
                                                                     d_matrix.shape, numpy.average(d_matrix),len(s_b),numpy.average(s_b),))
                 print('d_matrix : {}'.format(d_matrix))
                 #문제 풀이
-                unique_bundle_indexs = Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr = 0.05)
-                #unique_bundle_indexs = Bundle_selection_problem4(phi_b, D, s_b, min_pr = 0.05, w = 1)
+                #unique_bundle_indexs = Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr = 0.05)
+                unique_bundle_indexs = Bundle_selection_problem4(phi_b, D, s_b, lt_matrix, min_pr = 0.05, obj_type= obj_type)
                 #input('결과 확인')
                 unique_bundles = []
                 for index in unique_bundle_indexs:
@@ -84,21 +84,34 @@ def Calculate_Phi(rider, customers, bundle_infos, l=4):
     for customer_name in customers:
         customer = customers[customer_name]
         dist = distance(rider.last_departure_loc,customer.location)
-        dist_list.append([customer.name, dist])
-        displayed_values.append((dist + distance(customer.store_loc, customer.location))/rider.speed)
+        try:
+            displayed_value = customer.fee / ((dist + distance(customer.store_loc, customer.location))/rider.speed)
+        except:
+            input('dist {} dist2{} speed{} '.format(dist, distance(customer.store_loc, customer.location), rider.speed))
+        dist_list.append([customer.name, dist, displayed_value])
     dist_list.sort(key = operator.itemgetter(1))
-    dist_list = dist_list[len(rider.p_j)*l:]
+    displayed_dist = []
+    for info in dist_list:
+        displayed_values.append(info[2])
+        displayed_dist.append(info[1])
+    dist_list = dist_list[:(len(rider.p_j)+1)*l] #todo : 계산 확인
     for bundle_info in bundle_infos:
         #input(bundle_info)
         bundle_dist = distance(rider.last_departure_loc, customers[bundle_info[4][0]].store_loc)
+        bundle_fee = 0
+        for customer_name in bundle_info[4]:
+            bundle_fee += customers[customer_name].fee
+        bundle_value = bundle_fee / bundle_info[6]
         tem_dp_br = []
         for page_index in range(len(rider.p_j)):
             #print('dist_list {} page_index {} displayed_values {} bundle_info {}'.format(dist_list,page_index,displayed_values, bundle_info[6]))
-            if len(dist_list) <= (page_index + 1)*l or (bundle_dist < dist_list[(page_index + 1)*l][1] and bundle_info[6] > max(displayed_values[:(page_index + 1)*l])):
+            if bundle_value > max(displayed_values[:(page_index + 1)*l]) and  bundle_dist < max(displayed_dist[:(page_index + 1)*l]):
+            #if len(dist_list) <= (page_index + 1)*l or (bundle_dist < dist_list[(page_index + 1)*l][1] and bundle_info[6] > max(displayed_values[:(page_index + 1)*l])):
                 tem_dp_br.append(rider.p_j[page_index])
             else:
                 tem_dp_br.append(0)
-        dp_br.append(gamma*(1-sum(tem_dp_br)))
+        dp_br.append(1-gamma*sum(tem_dp_br))
+        #dp_br.append(gamma * (1 - sum(tem_dp_br)))
     return dp_br
 
 
@@ -126,11 +139,27 @@ def Bundle_Ready_Processs(now_t, platform_set, orders, riders, p2,interval, bund
         thres = 1
         size3bundle = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, 3, p2, speed=speed, bundle_permutation_option = bundle_permutation_option, thres= thres)
         size2bundle = ConstructFeasibleBundle_TwoSided(target_order, considered_customers, 2, p2, speed=speed,bundle_permutation_option=bundle_permutation_option , thres= thres)
-        Feasible_bundle_set += size3bundle + size2bundle
+        max_index = 2
+        tem_infos = []
+        try:
+            size3bundle.sort(key=operator.itemgetter(6))
+            for info in size3bundle[:max_index]:
+                tem_infos.append(info)
+        except:
+            pass
+        try:
+            size2bundle.sort(key=operator.itemgetter(6))
+            for info in size2bundle[:max_index]:
+                tem_infos.append(info)
+        except:
+            pass
+        Feasible_bundle_set += tem_infos
+        #Feasible_bundle_set += size3bundle + size2bundle
         end = time.time()
         print('고객 당 계산 시간 {} : B2::{} B3::{}'.format(end - start, len(size2bundle),len(size3bundle)))
         if len(size3bundle + size2bundle) > 1:
             print('번들 생성 가능')
+    print('T {} 번들 수 {}'.format(now_t, len(Feasible_bundle_set)))
     #문제에 필요한 데이터 계산
     #1 phi 계산
     phi_br = []
@@ -138,6 +167,7 @@ def Bundle_Ready_Processs(now_t, platform_set, orders, riders, p2,interval, bund
         rider = riders[rider_name]
         phi_r = Calculate_Phi(rider, orders, Feasible_bundle_set)
         phi_br.append(phi_r)
+        #input('라이더 {} / 확인 phi_r {}'.format(rider.name, phi_r))
     phi_b = []
     for bundle_index in range(len(phi_br[0])):
         tem = 1
@@ -146,7 +176,7 @@ def Bundle_Ready_Processs(now_t, platform_set, orders, riders, p2,interval, bund
             if value > 0:
                 tem = tem * value
         phi_b.append(tem)
-    print('phi_b {}'.format(phi_b))
+    #input('phi_b {}'.format(phi_b))
     #2 d-matrix계산
     d_matrix = numpy.zeros((len(Feasible_bundle_set),len(Feasible_bundle_set)))
     for index1 in range(len(Feasible_bundle_set)):
@@ -174,7 +204,15 @@ def Bundle_Ready_Processs(now_t, platform_set, orders, riders, p2,interval, bund
                 D.append([Feasible_bundle_set.index(info1), Feasible_bundle_set.index(info2)])
             info2_index += 1
         info1_index += 1
-    return Feasible_bundle_set, phi_b, d_matrix, s_b, D
+    lt_vector = []
+    for info in Feasible_bundle_set:
+        bundle_names = info[4]
+        over_t = []
+        for name in bundle_names:
+            customer = orders[name]
+            over_t.append(now_t - customer.time_info[0])
+        lt_vector.append(sum(over_t)/len(over_t))
+    return Feasible_bundle_set, phi_b, d_matrix, s_b, D, lt_vector
 
 
 def Break_the_bundle(platform, orders, org_bundle_num, rev_bundle_num):
@@ -183,3 +221,36 @@ def Break_the_bundle(platform, orders, org_bundle_num, rev_bundle_num):
                       org_bundle_num[1] - rev_bundle_num[1]]  # [B2 해체 수, B3 해체 수]
         # 번들의 해체가 필요
         platform.platform = BreakBundle(break_info, platform, orders)
+
+
+def Rider_Bundle_plt(rider):
+    count = 0
+    for bundle_info in rider.bundles_infos:
+        save_name = 'R{};C{}'.format(rider.name, count)
+        #nodes = []
+        #for info in bundle_info:
+        #    nodes.append(info[2])
+        print('Title:{}save_name/Route:{}'.format(save_name,bundle_info))
+        Bundle_plot(bundle_info, save_name)
+        count += 1
+        #input('확인2')
+def Bundle_plot(bundle_points, save_name='nan'):
+    ax = plt.axes()
+    # arrow
+    #ax.title(save_name)
+    ax.set_xlim([0, 50])
+    ax.set_ylim([0, 50])
+    ax.set_title(save_name)
+    for index in range(1, len(bundle_points)):
+        bf = bundle_points[index - 1][2]
+        af = bundle_points[index][2]
+        ax.arrow(bf[0], bf[1], af[0]-bf[0], af[1]-bf[1], head_width=0.5, head_length=0.5, fc='k', ec='k')
+    for index in range(0, len(bundle_points)):
+        node = bundle_points[index][2]
+        if bundle_points[index][1] == 1:
+            ax.plot(node[0], node[1], 'r-o', lw=1)
+        else:
+            ax.plot(node[0], node[1], 'b-*', lw=1)
+    plt.savefig('test' + save_name + '.png', dpi=100)
+    plt.close()
+

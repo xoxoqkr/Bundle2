@@ -97,7 +97,7 @@ def FLT_Calculate(customer_in_order, customers, route, p2, except_names , M = 10
     for order_name in names:
         if order_name not in except_names:
             #rev_p2 = p2
-            rev_p2 = customers[order_name].p2
+            rev_p2 = customers[order_name].p2*p2 + customers[order_name].time_info[6]
             #input('p2 확인 1 :: {}'.format(rev_p2))
             if customers[order_name].time_info[2] != None:
                 #print('FLT 고려 대상 {} 시간 정보 {}'.format(order_name,customers[order_name].time_info))
@@ -161,7 +161,8 @@ def RiderGenerator(env, Rider_dict, Platform, Store_dict, Customer_dict, capacit
 
 
 def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer_dict, working_duration = 120, exp_WagePerHr = 9000 ,input_speed = None,
-                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False, rider_num = 5, lamda_list = None):
+                        input_capacity = None, platform_recommend = False, input_order_select_type = None, bundle_construct = False, rider_num = 5,
+                        lamda_list = None, p2 = 1.5, ite = 1):
     """
     Generate the rider until t <= runtime and rider_num<= gen_num
     :param env: simpy environment
@@ -206,7 +207,7 @@ def RiderGeneratorByCSV(env, csv_dir, Rider_dict, Platform, Store_dict, Customer
         single_rider = re_A1_class.Rider(env,name,Platform, Customer_dict,  Store_dict, start_time = env.now ,speed = speed, end_t = working_duration, \
                                    capacity = capacity, freedom=freedom, order_select_type = order_select_type, wait_para =wait_para, \
                                       uncertainty = uncertainty, exp_error = exp_error, platform_recommend = platform_recommend,
-                                         bundle_construct= bundle_construct, lamda= lamda)
+                                         bundle_construct= bundle_construct, lamda= lamda, p2 = p2, ite = ite)
         single_rider.exp_wage = exp_WagePerHr
         Rider_dict[name] = single_rider
         interval = data[interval_index]
@@ -503,7 +504,9 @@ def ResultSave(Riders, Customers, title = 'Test', sub_info = 'None', type_name =
             wait_t = customer.ready_time - customer.time_info[8] #음식이 준비된 시간 - 가게에 도착한 시간.
         except:
             pass
-        info = [customer_name] + customer.time_info[:4] +[customer.time_info[8]]+[customer.cook_time]+ [customer.food_wait, customer.rider_wait]+[wait_t, customer.fee,customer.who_serve, customer.distance, customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait,customer.in_bundle_time]
+        info = [customer_name] + customer.time_info[:4] +[customer.time_info[8]]+[customer.cook_time]+ \
+               [customer.food_wait, customer.rider_wait]+[wait_t, customer.fee,customer.who_serve, customer.distance,
+                                                          customer.p2, customer.inbundle,customer.cook_time, customer.rider_wait,customer.in_bundle_time]
         info += [customer.cancel]
         if customer.time_info[3] != None:
             info += [customer.time_info[3] - customer.time_info[0], customer.time_info[3] - customer.time_info[2]]

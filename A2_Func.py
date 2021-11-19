@@ -907,12 +907,18 @@ def Platform_process(env, platform_set, orders, riders, p2,thres_p,interval, spe
 
 def ResultPrint(name, customers, speed = 1, riders = None):
     rider_income_var = None
+    done_bundle = []
     if riders != None:
         riders_incomes = []
         for rider_name in riders:
             rider = riders[rider_name]
             riders_incomes.append(rider.income)
+            done_bundle += rider.bundle_count
         rider_income_var = np.var(riders_incomes)
+    try:
+        ave_done_bundle = sum(done_bundle)/len(done_bundle)
+    except:
+        ave_done_bundle = 0
     served_customer = []
     TLT = []
     FLT = []
@@ -945,7 +951,7 @@ def ResultPrint(name, customers, speed = 1, riders = None):
             OD_ratio_value = None
         print('시나리오 명 {} 전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(name, len(customers), len(TLT),served_ratio,av_TLT,
                                                                              av_FLT, av_MFLT))
-        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var,len(OD_ratios),OD_ratio_value,sum(OD_ratios)/len(OD_ratios)]
+        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var,len(OD_ratios),OD_ratio_value,sum(OD_ratios)/len(OD_ratios),len(done_bundle),ave_done_bundle]
     except:
         print('TLT 수:  {}'.format(len(TLT)))
         return None

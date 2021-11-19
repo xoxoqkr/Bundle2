@@ -94,14 +94,14 @@ def Bundle_selection_problem2(F):
 
 def Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr):
     bundle_indexs = list(range(len(s_b)))
-
-    m = gp.Model("mip1")
-    x = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="x")
-    z = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="z")
     try:
         w = sum(s_b) / len(s_b)
     except:
         w = 1
+
+    m = gp.Model("mip1")
+    x = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="x")
+    z = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="z")
     #Set objective function
     m.setObjective(gp.quicksum(s_b[i]*x[i] - w*z[i] for i in bundle_indexs) , GRB.MAXIMIZE)
 
@@ -125,26 +125,48 @@ def Bundle_selection_problem3(phi_b, d_matrix, s_b, min_pr):
         return []
 
 
-def Bundle_selection_problem4(phi_b, D, s_b, min_pr, w = None):
+def Bundle_selection_problem4(phi_b, D, s_b, lt_matrix,min_pr=0.05, obj_type = 'simple_max_s'):
     bundle_indexs = list(range(len(s_b)))
-    if w == None:
-        try:
+    try:
+        if obj_type == 'max_s+probability':
             w = sum(s_b)/len(s_b)
-        except:
+        elif obj_type == 'over_lt+probability':
+            w = sum(lt_matrix) / len(lt_matrix)
+        else:
             w = 1
+    except:
+        w = 1
     m = gp.Model("mip1")
     x = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="x")
     z = m.addVars(len(bundle_indexs), vtype=GRB.BINARY, name="z")
-
     #Set objective function
-    m.setObjective(gp.quicksum(s_b[i]*x[i] - w*z[i] for i in bundle_indexs) , GRB.MAXIMIZE)
-
+    if obj_type == 'simple_max_s':
+        m.setObjective(gp.quicksum(s_b[i]*x[i] for i in bundle_indexs), GRB.MAXIMIZE)
+    elif obj_type == 'max_s+probability':
+        m.setObjective(gp.quicksum(s_b[i] * x[i] - w * z[i] for i in bundle_indexs), GRB.MAXIMIZE)
+    elif obj_type == 'simple_over_lt':
+        m.setObjective(gp.quicksum(lt_matrix[i] * x[i] for i in bundle_indexs), GRB.MAXIMIZE)
+    elif obj_type == 'over_lt+probability':
+        m.setObjective(gp.quicksum(lt_matrix[i] * x[i] - w * z[i] for i in bundle_indexs), GRB.MAXIMIZE)
+    else:
+        pass
     for info in D:
         m.addConstr(x[info[0]] + x[info[1]] <= 1)
 
     m.addConstrs(x[i] * phi_b[i] - z[i] <= min_pr for i in bundle_indexs)
     #풀이
     m.optimize()
+    test = []
+    count = 0
+    for val in m.getVars():
+        if val.VarName[0] == 'x' and float(val.x) == 1.0:
+            test.append(phi_b[count])
+    try:
+        #input('선택된 번들 p_b 평균 : {} // p_b {} '.format(sum(test)/len(test), test))
+        pass
+    except:
+        #input('선택된 번들 p_b 없음 : {}'.format(test))
+        pass
     try:
         print('Obj val: %g' % m.objVal)
         res = []

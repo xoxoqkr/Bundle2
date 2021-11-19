@@ -36,9 +36,9 @@ class Order(object):
 
 
 class Rider(object):
-    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 15, bound = 5, freedom = True,
+    def __init__(self, env, i, platform, customers, stores, start_time = 0, speed = 1, capacity = 3, end_t = 120, p2= 2, bound = 5, freedom = True,
                  order_select_type = 'simple', wait_para = False, uncertainty = False, exp_error = 1, platform_recommend = False, p_ij = [0.5,0.3,0.2],
-                 bundle_construct = False, lamda = 5):
+                 bundle_construct = False, lamda = 5, ite = 1):
         self.name = i
         self.env = env
         self.gen_time = int(env.now)
@@ -46,6 +46,7 @@ class Rider(object):
         self.visited_route = [[-1, -1, [25, 25], int(env.now)]]
         self.speed = speed
         self.route = []
+        self.bundles_infos = []
         self.run_process = None
         self.capacity = capacity
         self.onhand = []
@@ -84,6 +85,11 @@ class Rider(object):
         self.p_j = p_ij
         self.bundle_construct = bundle_construct
         self.order_select_time = []
+        self.pages_history = []
+        self.Rand = numpy.random.RandomState(seed=i + ite)
+        self.bundle_count = []
+        self.snapshots = []
+        #numpy.random.seed(4)
         env.process(self.RunProcess(env, platform, customers, stores, self.p2, freedom= freedom, order_select_type = order_select_type, uncertainty = uncertainty))
         env.process(self.TaskSearch(env, platform, customers, p2=self.p2, order_select_type=order_select_type, uncertainty=uncertainty))
 
@@ -203,7 +209,7 @@ class Rider(object):
 
     def TaskSearch(self, env, platform, customers, p2=0, order_select_type='simple', uncertainty=False, score_type = 'simple'):
         while int(env.now) < self.end_t:
-            if len(self.route)  == 0 or env.now >= self.next_search_time:# or len(self.onhand) <= self.max_order_num:
+            if (len(self.route)  == 0 or env.now >= self.next_search_time) and len(self.onhand) <= self.max_order_num:
                 #order_info = self.OrderSelect(platform, customers, p2=p2, score_type=score_type,uncertainty=uncertainty)  # todo : 라이더의 선택 과정
                 order_info = self.OrderSelect2(platform, customers, p2=p2, uncertainty=uncertainty)
                 if order_info != None:
@@ -214,13 +220,12 @@ class Rider(object):
                         self.b_select += 1
                         self.num_bundle_customer += len(order_info[5])
                     Basic.UpdatePlatformByOrderSelection(platform,order_info[0])  # 만약 개별 주문 선택이 있다면, 해당 주문이 선택된 번들을 제거.
-                """
-                if self.bundle_construct == True:
+                #next = numpy.random.poisson(self.search_lamda)
+                if self.bundle_construct == True and len(self.onhand) <= self.max_order_num:
                     next = self.check_t
                 else:
-                    next = numpy.random.poisson(self.search_lamda)                
-                """
-                next = numpy.random.poisson(self.search_lamda)
+                    next = self.Rand.poisson(self.search_lamda)
+                    #next = numpy.random.poisson(self.search_lamda)
                 self.next_search_time += next
                 self.order_select_time.append(env.now)
                 yield env.timeout(next)
@@ -240,23 +245,35 @@ class Rider(object):
                     bundle_task_names.append([task.index, dist])
                 bound_order_names.append([task.index, dist])
         bound_order_names.sort(key=operator.itemgetter(1))
-        rv = random.random()
+        #rv = numpy.random.random()
+        rv = float(self.Rand.random(size=1))
         page = 1
         pages = list(range(len(self.p_j)))
         for index in pages:
             #print('index {} sum{}'.format(index,sum(self.p_j[:index+1])))
             if rv < sum(self.p_j[:index+1]):
-                page = self.p_j.index(self.p_j[index]) + 1
+                page = index + 1
+                self.pages_history.append(rv)
                 #input('rv{}, index {} pages {} page {} sum{}'.format(rv, index,self.p_j, page,sum(self.p_j[:index+1]) ))
                 break
         considered_tasks = bound_order_names[:page*l]
         #input(considered_tasks)
-        considered_tasks_names = []
-        for task_info in considered_tasks:
-            considered_tasks_names += platform.platform[task_info[0]].customers
+        #considered_tasks_names = []
+        #for task_info in considered_tasks:
+        #    considered_tasks_names += platform.platform[task_info[0]].customers
+        nearest_bundle = 0
+        out_count = 0
+        for outer_task in bound_order_names[page*l:]:
+            task = platform.platform[outer_task[0]]
+            if len(task.customers) > 1:
+                nearest_bundle = page*l + out_count
+                break
+            out_count += 1
         for task_info in considered_tasks:
             task = platform.platform[task_info[0]]
-            #1해당 테스크의 점수 계산
+            #if len(task.customers) > 2:
+            #    continue
+            #1 해당 테스크의 점수 계산
             mv_time = 0
             times = []
             if len(self.route) > 0:
@@ -280,16 +297,25 @@ class Rider(object):
                 best_route_info = self.ShortestRoute(task, customers, p2=p2, uncertainty=uncertainty) #task가 산입될 수 있는 가장 좋은 경로
                 # best_route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
                 if len(best_route_info) > 0:
-
                     if len(best_route_info) < 5:
                         input('best_route_info {} '.format(best_route_info))
                     benefit = task.fee / best_route_info[5]  # 이익 / 운행 시간
                     scores.append([task.index] + best_route_info + [benefit] + ['rider'])
+                    #input('리스트 확인 {}'.format(scores[-1]))
             #3가장 높은 점수 주문 선택
             scores.sort(key=operator.itemgetter(7), reverse=True)
         if len(scores) > 0:
+            snapshot_info = self.SnapShotSaver(scores, page,l)
+            nearest_bundle_page = 0
+            try:
+                int(nearest_bundle / l)
+            except:
+                pass
+            self.snapshots.append(snapshot_info + [nearest_bundle, nearest_bundle_page])
+            #[라이더 이름, 시간, 확인 페이지, 번들 수, 번들 최대 가치, 단건 주문 최대 가치, 가장 가까운 주문 정렬 순서, 가장 가까운 주문 정렬 순서 페이지]
             return scores[0]
         else:
+            self.snapshots.append([round(self.env.now,4),None])
             return None
 
 
@@ -390,6 +416,7 @@ class Rider(object):
         @param M: 가게와 고객을 구분하는 임의의 큰 수
         @return: 최단 경로 정보 -> [경로, 최대 FLT, 평균 FLT, 최소FLT, 경로 내 고객 이름, 경로 운행 시간]
         """
+        print('ShortestRoute {}/ 고객 수{}'.format(self.name, len(order.customers)))
         prior_route = []
         index_list = []
         except_names = []
@@ -519,6 +546,9 @@ class Rider(object):
         @param now_t: 현재 시간
         """
         names = order_info[5]
+        if len(names) > 1:
+            self.bundles_infos.append(route)
+            self.bundle_count.append(len(names))
         for name in names:
             customers[name].time_info[1] = now_t
             if len(names) > 1:
@@ -564,6 +594,32 @@ class Rider(object):
             x_inc = (nodeB[0] - nodeA[0])*ratio
             y_inc = (nodeB[1] - nodeA[1])*ratio
             return [nodeA[0] + x_inc, nodeA[1] + y_inc]
+
+
+    def SnapShotSaver(self, infos, page, l=4):
+        # best_route_info = [rev_route, max(ftds), sum(ftds) / len(ftds), min(ftds), order_names, route_time]
+        now_t = round(self.env.now,4)
+        bundle_exist = 0
+        single_values = [0]
+        bundle_values = [0]
+        for info in infos:
+            if len(info[5]) > 1:
+                bundle_values.append(info[7])
+                bundle_exist += 1
+            else:
+                single_values.append(info[7])
+        max_bundle_value = max(bundle_values)
+        max_single_value = max(single_values)
+        if max_bundle_value == 0:
+            type = 1 #번들이 존재X
+        elif max_bundle_value > max_single_value:
+            type = 2 #번들 존재 & 가치 충분
+        else:
+            type = 3 #번들 존재 & 가치 부족
+        res = [self.name, now_t, page,l, len(bundle_values) - 1, max_bundle_value, max_single_value, type]
+        #[라이더 이름, 시간, 확인 페이지, 페이지당 주문수, 페이지 내 번들 수, 번들 최대 가치, 단건 주문 최대 가치, type]
+        return res
+
 
 class Store(object):
     """
@@ -748,6 +804,8 @@ class scenario(object):
         self.considered_customer_type = considered_customer_type
         self.platform_recommend = False
         self.rider_bundle_construct = False
+        self.obj_type = 'simple_max_s'
+        self.snapshots = []
 
 def WaitTimeCal1(exp_store_arrive_t, assign_t, exp_cook_time, cook_time, move_t = 0):
     exp_food_ready_t = assign_t + exp_cook_time
