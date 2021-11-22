@@ -26,7 +26,6 @@ save_budnle_as_file = False
 rider_working_time = 120
 # env = simpy.Environment()
 store_num = 20
-rider_num = 9
 rider_gen_interval = 2  # 라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 3
@@ -80,7 +79,7 @@ for sc1 in scenarios:
     print(sc1.platform_recommend, sc1.rider_bundle_construct,sc1.obj_type)
 
 #scenarios = scenarios[4:]
-scenarios = scenarios[4:]
+scenarios = scenarios[2:]
 #scenarios = [scenarios[8]]
 """
 scenarios = [scenarios[1]]*4
@@ -93,10 +92,10 @@ print('시나리오 확인3')
 for sc3 in scenarios:
     print(sc3.platform_recommend, sc3.rider_bundle_construct,sc3.obj_type)
 #input('시나리오 확인')
-
+rider_num = 9
 #exp_range = [0,2,3,4]*10 #인스턴스 1에러가 있음.
-exp_range = [2]*2 #인스턴스 1에러가 있음.
-instance_type = 'Instance' #'Instance' / 'Instance_random_store'
+exp_range = [0,2,3,4]*1 #인스턴스 1에러가 있음.
+instance_type = 'Instance_random_store' #'Instance' / 'Instance_random_store'
 #input('확인 {}'.format(len(scenarios)))
 
 rv_count = 0
@@ -283,6 +282,7 @@ print('"요약 정리/ 라이더 수 {}'.format(rider_num))
 print_count = 0
 for sc in scenarios:
     res_info = []
+    #input('확인{}'.format(sc.res))
     for index in list(range(len(sc.res[0]))):
         tem = []
         for info in sc.res:

@@ -943,6 +943,7 @@ def ResultPrint(name, customers, speed = 1, riders = None):
             if flt < mflt:
                 input('고객 확인; 고객 {}; 실제FLT{}; 최소FLT{}; 선택 이력{}; 시간정보 {}'.format(customer.name, flt, mflt, customer.who_picked, customer.time_info))
     customer_lead_time_var = np.var(TLT)
+    print('시도!!')
     try:
         served_ratio = round(len(TLT)/len(customers),2)
         av_TLT = round(sum(TLT)/len(TLT),2)
@@ -950,11 +951,14 @@ def ResultPrint(name, customers, speed = 1, riders = None):
         av_MFLT = av_FLT - round(sum(MFLT)/len(MFLT),2)
         if len(OD_ratios) > 0:
             OD_ratio_value = np.std(OD_ratios)
+            OD_ave = sum(OD_ratios) / len(OD_ratios)
         else:
-            OD_ratio_value = None
+            OD_ave = 0
+            OD_ratio_value = 0
         print('시나리오 명 {} 전체 고객 {} 중 서비스 고객 {}/ 서비스율 {}/ 평균 LT :{}/ 평균 FLT : {}/직선거리 대비 증가분 : {}'.format(name, len(customers), len(TLT),served_ratio,av_TLT,
                                                                              av_FLT, av_MFLT))
-        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var,len(OD_ratios),OD_ratio_value,sum(OD_ratios)/len(OD_ratios),len(done_bundle),ave_done_bundle]
+        return [len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var,len(OD_ratios),OD_ratio_value, OD_ave ,len(done_bundle),ave_done_bundle]
     except:
-        print('TLT 수:  {}'.format(len(TLT)))
+        print('TLT : {}/ FLT :{} / MFLT :{}/OD_ratios:{} '.format(TLT[:2], FLT[:2], MFLT[:2], OD_ratios[:2]))
+        input('TLT 수:  {}'.format(len(TLT)))
         return None
