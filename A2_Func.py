@@ -932,6 +932,7 @@ def ResultPrint(name, customers, speed = 1, riders = None):
                 flt = customer.time_info[3] - customer.time_info[2]
             except:
                 flt  = 10
+                input('FLT = 0 : {}'.format(customer.time_info))
             mflt = distance(customer.store_loc, customer.location)/speed
             TLT.append(lt)
             FLT.append(flt)

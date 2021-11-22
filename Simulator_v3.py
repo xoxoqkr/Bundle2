@@ -20,12 +20,12 @@ platform_exp_error = 1.2  # 플랫폼이 가지는 불확실성
 cook_time_type = 'uncertainty'
 cooking_time = [7, 1]  # [평균, 분산]
 thres_p = 0
-save_as_file = True
+save_as_file = False
 save_budnle_as_file = False
 rider_working_time = 120
 # env = simpy.Environment()
 store_num = 20
-rider_num = 8
+rider_num = 6
 rider_gen_interval = 2  # 라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 3
@@ -94,8 +94,8 @@ for sc3 in scenarios:
 #input('시나리오 확인')
 
 #exp_range = [0,2,3,4]*10 #인스턴스 1에러가 있음.
-exp_range = [0]*1 #인스턴스 1에러가 있음.
-instance_type = 'Instance_random_store' #'Instance'
+exp_range = [0]*5 #인스턴스 1에러가 있음.
+instance_type = 'Instance_random_store' #'Instance' / 'Instance_random_store'
 #input('확인 {}'.format(len(scenarios)))
 
 rv_count = 0
@@ -275,7 +275,7 @@ for sc in scenarios:
         except:
             print('시나리오 {} ITE {} 결과 없음'.format(sc.name, count))
         count += 1
-print("요약 정리")
+print('"요약 정리/ 라이더 수 {}'.format(rider_num))
 print_count = 0
 for sc in scenarios:
     res_info = []
