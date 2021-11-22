@@ -929,17 +929,19 @@ def ResultPrint(name, customers, speed = 1, riders = None):
         if customer.time_info[3] != None:
             lt = customer.time_info[3] - customer.time_info[0]
             try:
-                flt = customer.time_info[3] - customer.time_info[2]
+                flt = round(customer.time_info[3] - customer.time_info[2],2)
             except:
                 flt  = 10
                 input('FLT = 0 : {}'.format(customer.time_info))
-            mflt = distance(customer.store_loc, customer.location)/speed
+            mflt = round(distance(customer.store_loc, customer.location)/speed,2)
             TLT.append(lt)
             FLT.append(flt)
             MFLT.append(mflt)
             OD_ratio = flt/mflt
             if OD_ratio > 1.0:
                 OD_ratios.append(OD_ratio - 1.0)
+            if flt < mflt:
+                input('고객 확인; 고객 {}; 실제FLT{}; 최소FLT{}; 선택 이력{}; 시간정보 {}'.format(customer.name, flt, mflt, customer.who_picked, customer.time_info))
     customer_lead_time_var = np.var(TLT)
     try:
         served_ratio = round(len(TLT)/len(customers),2)

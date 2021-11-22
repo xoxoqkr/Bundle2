@@ -11,12 +11,7 @@ import random
 import time
 import numpy
 import copy
-import math
-#from A3_two_sided import ConstructFeasibleBundle_TwoSided
-#from A2_Func import GenBundleOrder
-#from A3_two_sided import ParetoDominanceCount, ConstructFeasibleBundle_TwoSided
-#from A2_Func import *
-#import A2_Func
+
 
 
 # customer.time_info = [0 :발생시간, 1: 차량에 할당 시간, 2:차량에 실린 시간, 3:목적지 도착 시간,
@@ -162,6 +157,10 @@ class Rider(object):
                         yield env.process(self.RiderMoving(env, move_t))
                         print('T: {} 라이더 {} 고객 {} 도착 서비스 종료'.format(int(env.now),self.name, node_info[0]))
                         order.time_info[3] = env.now
+                        real_flt = round(order.time_info[3] - order.time_info[2],4)
+                        exp_flt = round(Basic.distance(order.location, order.store_loc)/self.speed,4)
+                        if real_flt < exp_flt:
+                            input('차이 {} ;고객 {};가게위치 {};고객 위치{};realFlt:{};expFlt:{}'.format(real_flt - exp_flt, order.name, order.store_loc, order.location, real_flt, exp_flt))
                         order.who_serve.append([self.name, int(env.now)])
                         try:
                             self.container.remove(node_info[0])
@@ -211,10 +210,10 @@ class Rider(object):
         while int(env.now) < self.end_t:
             if (len(self.route)  == 0 or env.now >= self.next_search_time) and len(self.onhand) <= self.max_order_num:
                 #order_info = self.OrderSelect(platform, customers, p2=p2, score_type=score_type,uncertainty=uncertainty)  # todo : 라이더의 선택 과정
-                order_info = self.OrderSelect2(platform, customers, p2=p2, uncertainty=uncertainty)
+                order_info, self_bundle = self.OrderSelect2(platform, customers, p2=p2, uncertainty=uncertainty)
                 if order_info != None:
                     platform.platform[order_info[0]].picked = True
-                    self.OrderPick(order_info, order_info[1], customers, env.now,route_revise_option=score_type)  # 라우트 결정 후
+                    self.OrderPick(order_info, order_info[1], customers, env.now,route_revise_option=score_type, self_bundle = self_bundle)  # 라우트 결정 후
                     self.last_pick_time = env.now
                     if order_info[8] == 'platform' and len(order_info[5]) > 0:
                         self.b_select += 1
@@ -233,12 +232,19 @@ class Rider(object):
                 yield env.timeout(self.check_t)
 
     def OrderSelect2(self, platform, customers, p2, uncertainty, l = 4):
+        self_bundle = False
         #플랫폼의 개별 점수에 대해 계산
         scores = []
         bound_order_names = []
         bundle_task_names = []
         for index in platform.platform:
             task = platform.platform[index]
+            duplicated_para = False
+            for name in task.customers:
+                if len(customers[name].who_picked) > 0:
+                    duplicated_para = True
+            if duplicated_para == True:
+                continue
             if task.picked == False:
                 dist = Basic.distance(self.last_departure_loc,task.route[0][2]) / self.speed  # 자신의 현재 위치와 order의 시작점(가게) 사이의 거리.
                 if len(task.customers) > 1:
@@ -301,6 +307,7 @@ class Rider(object):
                         input('best_route_info {} '.format(best_route_info))
                     benefit = task.fee / best_route_info[5]  # 이익 / 운행 시간
                     scores.append([task.index] + best_route_info + [benefit] + ['rider'])
+                    self_bundle = True
                     #input('리스트 확인 {}'.format(scores[-1]))
             #3가장 높은 점수 주문 선택
             scores.sort(key=operator.itemgetter(7), reverse=True)
@@ -313,10 +320,10 @@ class Rider(object):
                 pass
             self.snapshots.append(snapshot_info + [nearest_bundle, nearest_bundle_page])
             #[라이더 이름, 시간, 확인 페이지, 번들 수, 번들 최대 가치, 단건 주문 최대 가치, 가장 가까운 주문 정렬 순서, 가장 가까운 주문 정렬 순서 페이지]
-            return scores[0]
+            return scores[0], self_bundle
         else:
             self.snapshots.append([round(self.env.now,4),None])
-            return None
+            return None, self_bundle
 
 
     def OrderSelect(self, platform, customers, p2 = 0, score_type = 'simple',sort_standard = 7, uncertainty = False, current_loc = None, add = 'X'):
@@ -435,13 +442,14 @@ class Rider(object):
                     prior_route.append(visitied_node[0])
             #print('index_list {} 내용 {} 현재 경로 {} 과거 경로 {} 대상 경로 {}'.format(index_list, prior_route, self.route, self.visited_route, self.visited_route[index_list[0]:]))
             for prior in prior_route:
-                if prior < M and customers[prior].time_info[3] != None:
+                if prior < M and (customers[prior].time_info[3] != None or len(customers[prior].who_picked) > 0):
                     already_served_customer_names.append(prior)
         order_names = []  # 가게 이름?
         store_names = []
         for customer_name in order.customers:
-            order_names.append(customer_name)
-            store_names.append(customer_name + M)
+            if customer_name not in already_served_customer_names:
+                order_names.append(customer_name)
+                store_names.append(customer_name + M)
         #input('주문 목록1 {} /가게 목록1 {}'.format(order_names, store_names))
         for node_info in self.route:
             if node_info[1] == 1:
@@ -493,7 +501,16 @@ class Rider(object):
                             order_customers_names.append(past_name - M)
                 if len(already_served_customer_names) > 0:
                     #print('이미 서비스 받아서 고려 필요 X 고객 {}'.format(already_served_customer_names))
-                    pass
+                    continue
+                check_names = []
+                #input('경로 확인2:{}'.format(route))
+                duplicate_exist_para = False
+                for info in route:
+                    if info < M:
+                        if len(customers[info].who_picked) > 0:
+                            duplicate_exist_para = True
+                if duplicate_exist_para == True:
+                    continue
                 # todo: FLT_Calculate 가 모든 형태의 경로에 대한 고려가 가능한기 볼 것.
                 #print('FTL계산시작')
                 t1 = time.time()
@@ -537,7 +554,7 @@ class Rider(object):
         else:
             return []
 
-    def OrderPick(self, order_info, route, customers, now_t, route_revise_option = 'simple'):
+    def OrderPick(self, order_info, route, customers, now_t, route_revise_option = 'simple', self_bundle = None):
         """
         수행한 order에 대한 경로를 차량 경로self.route에 반영하고, onhand에 해당 주문을 추가.
         @param order: class order
@@ -551,9 +568,11 @@ class Rider(object):
             self.bundle_count.append(len(names))
         for name in names:
             customers[name].time_info[1] = now_t
+            customers[name].who_picked.append([self.name, now_t,self_bundle,'single'])
             if len(names) > 1:
                 customers[name].inbundle = True
                 customers[name].type = 'bundle'
+                customers[name].who_picked[-1][3] = 'bundle'
             #print('주문 {}의 고객 {} 가게 위치{} 고객 위치{}'.format(order.index, name, customers[name].store_loc, customers[name].location))
         #print('선택된 주문의 고객들 {} / 추가 경로{}'.format(names, route))
         if route[0][1] != 0:
@@ -765,6 +784,7 @@ class Customer(object):
         self.priority_weight = 1
         self.cancel = False
         self.rider_bundle = [None, None]
+        self.who_picked = []
         env.process(self.CustomerLeave(env, platform))
 
 

@@ -25,7 +25,7 @@ save_budnle_as_file = False
 rider_working_time = 120
 # env = simpy.Environment()
 store_num = 20
-rider_num = 6
+rider_num = 9
 rider_gen_interval = 2  # 라이더 생성 간격.
 rider_speed = 3
 rider_capacity = 3
@@ -78,8 +78,8 @@ print('시나리오 확인2')
 for sc1 in scenarios:
     print(sc1.platform_recommend, sc1.rider_bundle_construct,sc1.obj_type)
 
-#scenarios = [scenarios[3]]
-scenarios = scenarios[2:]
+#scenarios = scenarios[4:]
+scenarios = scenarios[4:]
 #scenarios = [scenarios[8]]
 """
 scenarios = [scenarios[1]]*4
@@ -94,8 +94,8 @@ for sc3 in scenarios:
 #input('시나리오 확인')
 
 #exp_range = [0,2,3,4]*10 #인스턴스 1에러가 있음.
-exp_range = [0]*5 #인스턴스 1에러가 있음.
-instance_type = 'Instance_random_store' #'Instance' / 'Instance_random_store'
+exp_range = [2]*2 #인스턴스 1에러가 있음.
+instance_type = 'Instance' #'Instance' / 'Instance_random_store'
 #input('확인 {}'.format(len(scenarios)))
 
 rv_count = 0
@@ -200,8 +200,11 @@ for ite in exp_range:#range(0, 1):
         #결과 저장 부
         tm = time.localtime()
         string = time.strftime('%Y-%m-%d %I:%M:%S %p', tm)
-        info = [string, ite, sc.name, sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type, sc.bundle_selection_type, 0, \
-        sc.res[-1][0],sc.res[-1][1], sc.res[-1][2], sc.res[-1][3], sc.res[-1][4], sc.res[-1][5], sc.res[-1][6], sc.res[-1][7], sc.res[-1][8]]
+        try:
+            info = [string, ite, sc.name, sc.considered_customer_type, sc.unserved_order_break, sc.scoring_type, sc.bundle_selection_type, 0, \
+            sc.res[-1][0],sc.res[-1][1], sc.res[-1][2], sc.res[-1][3], sc.res[-1][4], sc.res[-1][5], sc.res[-1][6], sc.res[-1][7], sc.res[-1][8]]
+        except:
+            info = ['N/A']
         #[len(customers), len(TLT),served_ratio,av_TLT,av_FLT, av_MFLT, round(sum(MFLT)/len(MFLT),2), rider_income_var,customer_lead_time_var]
         f = open("InstanceRES.csv", 'a', newline='')
         wr = csv.writer(f)
@@ -282,7 +285,12 @@ for sc in scenarios:
     for index in list(range(len(sc.res[0]))):
         tem = []
         for info in sc.res:
-            tem.append(info[index])
+            #input(info)
+            if type(info) == list:
+                tem.append(info[index])
+            else:
+                input(info)
+                pass
         res_info.append(sum(tem)/len(tem))
     if print_count == 0:
         print('인스턴스종류;SC;플랫폼;라이더;obj;전체 고객;서비스된 고객;서비스율;평균LT;평균FLT;직선거리 대비 증가분;원래 O-D길이;라이더 수익 분산;LT분산;'
